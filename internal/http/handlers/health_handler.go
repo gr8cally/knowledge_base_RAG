@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
+	"time"
+
+	sqlitestore "knowledge_base_RAG/internal/storage/sqlite"
 )
 
 type HealthHandler struct {
@@ -20,23 +22,16 @@ func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *HealthHandler) Ready(w http.ResponseWriter, _ *http.Request) {
-	if err := os.MkdirAll(filepath.Dir(h.sqlitePath), 0o755); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"status": "not_ready",
-			"error":  err.Error(),
-		})
-		return
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	f, err := os.OpenFile(h.sqlitePath, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
+	if err := sqlitestore.Ping(ctx, h.sqlitePath); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"status": "not_ready",
 			"error":  err.Error(),
 		})
 		return
 	}
-	_ = f.Close()
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
