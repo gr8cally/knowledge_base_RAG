@@ -30,6 +30,10 @@ type Config struct {
 
 // Load reads configuration from env and validates required keys.
 func Load() (Config, error) {
+	// Best-effort .env load for local/dev runs (e.g., GoLand debug).
+	// Existing process env vars keep precedence.
+	_ = loadDotEnv(".env")
+
 	cfg := Config{
 		AppEnv:              getEnv("APP_ENV", "development"),
 		HTTPAddr:            getEnv("HTTP_ADDR", ":8080"),
