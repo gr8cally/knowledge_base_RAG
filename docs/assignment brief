@@ -1,0 +1,26 @@
+Your task is to build an AI agent that allows a user to query and interact with their personal knowledge base. The agent should ingest user-provided documents, index them using embeddings, and retrieve relevant context to answer questions. The goal is to evaluate your ability to build retrieval-augmented AI systems that organize and surface insights from personal information sources while providing a high-quality conversational AI interface.
+
+
+Objective
+Create an agent application that:
+
+Ingests user documents into a personal knowledge base
+Builds an embedding-based retrieval system
+Accepts natural language questions about stored documents
+Retrieves relevant information from the knowledge base
+Generates contextual answers grounded in the user's documents
+
+Requirements
+Use either LangChain or Mastra as your agent framework.
+Include a UI with best-practices in AI UX.
+Your app must allow users to upload and ingest documents into their personal knowledge base, supported formats should include PDF, Markdown, text files, scanned documents and optionally web pages.
+Your app should maintain a history of previously uploaded document collections and previous conversations, and allow switching between them.
+Previously uploaded knowledge bases can be refreshed or re-indexed.
+Answers returned from the agent should include references to the retrieved documents.
+The agent should support conversational queries where follow-up questions can rely on previous context.
+You must use environment variables for all API keys.
+Use the OPENROUTER_API_KEY for the API key.
+Use the MODEL_NAME env variable for the model name.
+You must include an .env.example file.
+Include clear documentation in a top-level README.md explaining how to set up and run the Agent UI and backend.
+There will be bonus points for including a CLI.

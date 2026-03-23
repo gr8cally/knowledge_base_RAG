@@ -1,0 +1,41 @@
+```text
+You are a senior software engineer. Read the Project_SPEC.md and produce a PHASED IMPLEMENTATION PLAN document in Markdown.
+
+Requirements:
+1. Make the plan execution-ready for another engineer/LLM to follow without ambiguity.
+2. Use vertical slices where possible.
+3. Include explicit phases with:
+   - Objective
+   - Scope (in/out)
+   - Prerequisites
+   - Files/modules to create or modify
+   - Step-by-step tasks
+   - Risks and mitigations
+   - Test/verification checklist
+   - Exit gate (clear pass criteria)
+   - Handoff notes for next phase
+4. Add a phase status table at the top (`pending`, `in_progress`, `complete`) with notes.
+5. Add a “Conventions/Decisions” section for fixed technical choices (module path, framework, env vars, tooling).
+6. Include “read this first” references to critical sections of the spec per phase.
+7. Separate MVP-required work from deferred work; put deferred items in a dedicated backlog section.
+8. Prefer concrete commands/examples (build/test/run) and exact route/file names when available in the spec.
+9. Do not invent features outside the spec; if something is unclear, list assumptions and open questions.
+10. Output only the final Markdown plan.
+
+Output format:
+- Title: “Implementation Plan — <Project Name>”
+- Sections:
+  - Purpose
+  - Document map
+  - Phase status table
+  - Conventions/Decisions
+  - Phase 0..N (each with gate criteria)
+  - Cross-phase rules
+  - Deferred backlog
+  - Final handoff checklist
+  - ignore the testing stratefy session, add it to the todo, priority is to get a working code asap.
+
+Now generate the full plan from the provided SPEC.
+
+
+```
