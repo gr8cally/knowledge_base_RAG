@@ -379,11 +379,26 @@ curl -i -F "files=@./README.md" http://localhost:8080/api/kbs/<KB_ID>/documents/
 ```bash
 sqlite3 ./data/sqlite/app.db "SELECT display_name, chunk_count, status FROM documents WHERE kb_id='<KB_ID>';"
 ```
+8. Verify different-hash replace path (same filename, changed content):
+```bash
+printf "v1 content\n" > /tmp/replace-check.txt
+curl -i -F "files=@/tmp/replace-check.txt;filename=replace-check.txt" http://localhost:8080/api/kbs/<KB_ID>/documents/upload
+sqlite3 ./data/sqlite/app.db "SELECT id, sha256, storage_path FROM documents WHERE kb_id='<KB_ID>' AND normalized_name='replace-check.txt';"
+# Save first sha256/storage_path values from query output.
+
+printf "v2 changed content\n" > /tmp/replace-check.txt
+curl -i -F "files=@/tmp/replace-check.txt;filename=replace-check.txt" http://localhost:8080/api/kbs/<KB_ID>/documents/upload
+sqlite3 ./data/sqlite/app.db "SELECT id, sha256, storage_path FROM documents WHERE kb_id='<KB_ID>' AND normalized_name='replace-check.txt';"
+# Confirm sha256 and storage_path changed compared to first upload.
+ls -l <OLD_STORAGE_PATH_FROM_FIRST_UPLOAD>
+# Old path should not exist after replacement.
+```
 
 ### Exit gate
 1. Uploading a markdown/text file produces a `documents` row with `status='ready'` and `chunk_count > 0`.
 2. Worker logs chunk summary for the uploaded document.
 3. Same-filename/same-hash upload is skipped with explicit notice.
+4. Re-uploading same filename with different content updates `documents.sha256` and `documents.storage_path`, and removes the previous file from disk.
 
 ### Handoff notes
 Phase 4B replaces dry-run worker path with full embedding + Chroma indexing while keeping validated parsing/dedupe code intact.
