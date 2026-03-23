@@ -72,7 +72,7 @@ func runMigrations(ctx context.Context, dbPath string, migrationsFS fs.FS) error
 			continue
 		}
 
-		sqlBytes, err := fs.ReadFile(migrationsFS, filepath.Join("migrations", filename))
+		sqlBytes, err := fs.ReadFile(migrationsFS, "migrations/"+filename)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", filename, err)
 		}
