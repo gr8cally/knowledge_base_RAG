@@ -1,0 +1,87 @@
+You are a senior Go software engineer producing an implementation plan for another engineer or LLM to execute.
+
+The PROJECT_SPEC.md is provided path: docs/PROJECT_SPEC.md. It is the single source of truth.
+Do not invent features, files, packages, or behaviours that are not in the spec.
+If the spec is silent on something, state it as an open question — do not resolve it yourself.
+
+---
+
+TASK: Produce a PHASED IMPLEMENTATION PLAN document in Markdown.
+
+---
+
+PHASE STRUCTURE RULES:
+
+The project has two kinds of phases:
+
+1. Foundation phases (infrastructure-first, not vertical slices):
+   These must come first because nothing else can run without them.
+   Examples: project scaffold, config/env loading, SQLite migrations, Chroma connectivity,
+   embeddings service connectivity, LangChainGo wiring.
+   Each foundation phase must end with the server compiling and starting cleanly.
+
+2. Feature phases (vertical slices):
+   Each slice delivers one complete user-facing capability end-to-end:
+   from HTTP handler → service → storage/vector → response → UI fragment.
+   A phase is not done until the feature works in the running app, not just "files created."
+
+Target: 7–9 phases total. Do not pad with unnecessary phases; do not collapse unrelated work.
+
+---
+
+GO-SPECIFIC CONSTRAINTS (must be reflected in prerequisites and tasks):
+
+- Module path: to be confirmed — flag as open question if not in spec.
+- `templ generate` must run before every `go build`. Include this in all build steps.
+- External services required before any vector or embedding operation:
+    - Chroma vector DB assume this is already running, user will be responsible for this
+    - HuggingFace embedding server at `EMBEDDING_ENDPOINT` (flag setup steps explicitly)
+- SQLite is file-based; no external service needed.
+- LangChainGo LLM client uses the OpenAI provider pointed at OpenRouter — no custom LLM package.
+- LangChainGo sqlite3 memory (`memory/sqlite3`) manages its own `langchaingo_messages` table
+  in the same DB file as our `messages` table. Do not conflate the two.
+
+---
+
+PER-PHASE REQUIRED SECTIONS:
+
+- Objective: one sentence, outcome-focused
+- Spec references: exact section numbers from PROJECT_SPEC.md the implementer must read first
+- Scope in: what is built in this phase
+- Scope out: what is explicitly deferred (prevents scope creep)
+- Prerequisites: phases that must be complete + external services that must be running
+- Files to create or modify: exact paths from the spec directory structure
+- Step-by-step tasks: numbered, unambiguous, concrete
+  - Include exact shell commands for build/run/verify steps
+  - Include exact SQL, Go snippets, or curl calls where they remove ambiguity
+- Exit gate: specific, verifiable pass criteria (not "it works" — e.g., "`curl /healthz` returns HTTP 200 with `{"status":"ok"}`")
+- Handoff notes: what the next phase depends on from this one
+
+---
+
+DOCUMENT STRUCTURE:
+
+Title: "Implementation Plan — Personal Knowledge Base AI Agent"
+
+Sections in order:
+1. Purpose (2–3 sentences)
+2. Document map (one-line description of each section)
+3. Phase status table (columns: Phase | Title | Status | Notes) — all start as `pending`
+4. Conventions and Decisions (fixed choices: Go version, module path if known, tooling, env var names, naming conventions)
+5. Open Questions (anything the spec does not specify that an implementer must resolve before starting)
+6. Phase 0 … Phase N (each with all required sections above)
+7. Cross-phase rules (things that apply to every phase: error handling style, logging, no secrets in logs, etc.)
+8. Deferred backlog (items from the spec's Future TODO plus testing strategy)
+9. Final handoff checklist (conditions that mean the full MVP is shippable)
+
+---
+
+ADDITIONAL RULES:
+
+- Do not include a testing strategy in any phase. Move all testing work to the Deferred backlog.
+- Every exit gate must be a command or observable behaviour, not a subjective judgement.
+- The plan must be executable by an LLM with only the spec and this plan as inputs — no assumed tribal knowledge.
+- Prefer concrete over general: write exact file paths, exact env var names, exact function signatures where the spec provides them.
+- Flag every place where an implementer must make a decision the spec does not resolve.
+
+Output only the final Markdown plan. No preamble, no explanation outside the document.
