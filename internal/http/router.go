@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gr8cally/knowledge_base_RAG/internal/http/handlers"
-	"github.com/gr8cally/knowledge_base_RAG/internal/http/middleware"
+	"knowledge_base_RAG/internal/http/handlers"
+	"knowledge_base_RAG/internal/http/middleware"
 )
 
 func NewRouter(logger *slog.Logger, sqlitePath string) http.Handler {

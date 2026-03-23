@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	sqlitestore "github.com/gr8cally/knowledge_base_RAG/internal/storage/sqlite"
+	sqlitestore "knowledge_base_RAG/internal/storage/sqlite"
 )
 
 type HealthHandler struct {

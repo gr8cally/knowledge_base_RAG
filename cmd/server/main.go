@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gr8cally/knowledge_base_RAG/internal/config"
-	httpserver "github.com/gr8cally/knowledge_base_RAG/internal/http"
-	"github.com/gr8cally/knowledge_base_RAG/internal/observability"
-	sqlitestore "github.com/gr8cally/knowledge_base_RAG/internal/storage/sqlite"
+	"knowledge_base_RAG/internal/config"
+	httpserver "knowledge_base_RAG/internal/http"
+	"knowledge_base_RAG/internal/observability"
+	sqlitestore "knowledge_base_RAG/internal/storage/sqlite"
 )
 
 func main() {
