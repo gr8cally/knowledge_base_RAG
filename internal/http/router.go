@@ -15,9 +15,9 @@ func NewRouter(logger *slog.Logger, sqlitePath string) http.Handler {
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
 	mux.HandleFunc("GET /readyz", healthHandler.Ready)
 
-	handler := middleware.RequestID(mux)
+	handler := middleware.Recover(logger)(mux)
 	handler = middleware.Logging(logger)(handler)
-	handler = middleware.Recover(logger)(handler)
+	handler = middleware.RequestID(handler)
 
 	return handler
 }
