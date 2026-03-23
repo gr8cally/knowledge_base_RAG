@@ -11,10 +11,14 @@ import (
 
 type HealthHandler struct {
 	sqlitePath string
+	chromaPing func(context.Context) error
 }
 
-func NewHealthHandler(sqlitePath string) *HealthHandler {
-	return &HealthHandler{sqlitePath: sqlitePath}
+func NewHealthHandler(sqlitePath string, chromaPing func(context.Context) error) *HealthHandler {
+	return &HealthHandler{
+		sqlitePath: sqlitePath,
+		chromaPing: chromaPing,
+	}
 }
 
 func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
@@ -26,6 +30,14 @@ func (h *HealthHandler) Ready(w http.ResponseWriter, _ *http.Request) {
 	defer cancel()
 
 	if err := sqlitestore.Ping(ctx, h.sqlitePath); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"status": "not_ready",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	if err := h.chromaPing(ctx); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"status": "not_ready",
 			"error":  err.Error(),

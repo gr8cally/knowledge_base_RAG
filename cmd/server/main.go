@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"knowledge_base_RAG/internal/app"
 	"knowledge_base_RAG/internal/config"
 	httpserver "knowledge_base_RAG/internal/http"
 	"knowledge_base_RAG/internal/observability"
@@ -22,6 +23,17 @@ func main() {
 	}
 
 	logger := observability.NewLogger(cfg.AppEnv)
+	deps := app.NewDependencies(cfg, logger)
+
+	if _, err := deps.NewLLM(); err != nil {
+		logger.Error("failed to initialize llm client", "error", err)
+		os.Exit(1)
+	}
+
+	if _, err := deps.NewEmbedder(); err != nil {
+		logger.Error("failed to initialize embedder", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -30,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := httpserver.NewRouter(logger, cfg.SQLitePath)
+	router := httpserver.NewRouter(logger, cfg.SQLitePath, deps.CheckChroma)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
