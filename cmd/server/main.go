@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/gr8cally/knowledge_base_RAG/internal/config"
 	httpserver "github.com/gr8cally/knowledge_base_RAG/internal/http"
 	"github.com/gr8cally/knowledge_base_RAG/internal/observability"
+	sqlitestore "github.com/gr8cally/knowledge_base_RAG/internal/storage/sqlite"
 )
 
 func main() {
@@ -23,13 +23,10 @@ func main() {
 
 	logger := observability.NewLogger(cfg.AppEnv)
 
-	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath), 0o755); err != nil {
-		logger.Error("failed to create sqlite dir", "error", err)
-		os.Exit(1)
-	}
-
-	if _, err := os.OpenFile(cfg.SQLitePath, os.O_CREATE|os.O_RDWR, 0o644); err != nil {
-		logger.Error("failed to open sqlite file", "error", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := sqlitestore.Initialize(ctx, cfg.SQLitePath); err != nil {
+		logger.Error("failed to initialize sqlite", "error", err)
 		os.Exit(1)
 	}
 

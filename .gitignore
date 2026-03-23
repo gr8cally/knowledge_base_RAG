@@ -1,0 +1,15 @@
+# Local env files
+.env
+.env.local
+
+# Runtime data
+data/
+
+# IDE
+.idea/
+
+# Generated templ output
+internal/web/templates/*_templ.go
+
+# Binaries
+server
