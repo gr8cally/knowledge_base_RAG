@@ -44,6 +44,7 @@ func main() {
 	}
 
 	kbService := deps.NewKnowledgeBaseService()
+	conversationService := deps.NewConversationService(kbService)
 	documentService, err := deps.NewDocumentService(kbService, embedder)
 	if err != nil {
 		logger.Error("failed to initialize document service", "error", err)
@@ -56,6 +57,7 @@ func main() {
 		deps.CheckChroma,
 		kbService,
 		documentService,
+		conversationService,
 		cfg.MaxUploadMB)
 
 	srv := &http.Server{
