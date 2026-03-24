@@ -24,7 +24,6 @@ func main() {
 
 	logger := observability.NewLogger(cfg.AppEnv)
 	deps := app.NewDependencies(cfg, logger)
-	kbService := deps.NewKnowledgeBaseService()
 
 	if _, err := deps.NewLLM(); err != nil {
 		logger.Error("failed to initialize llm client", "error", err)
@@ -43,6 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	kbService := deps.NewKnowledgeBaseService()
 	router := httpserver.NewRouter(logger, cfg.SQLitePath, deps.CheckChroma, kbService)
 
 	srv := &http.Server{

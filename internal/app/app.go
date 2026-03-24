@@ -46,8 +46,6 @@ func (s *KnowledgeBaseService) Create(ctx context.Context, name, description str
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	// Use the persistent id as the namespace suffix expected by the spec.
-	kb.Namespace = "kb_" + kb.ID
 
 	if err := validateKB(kb.Name); err != nil {
 		return domain.KnowledgeBase{}, err
