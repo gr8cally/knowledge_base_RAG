@@ -16,7 +16,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrKnowledgeBaseNotFound = errors.New("knowledge base not found")
+var (
+	ErrKnowledgeBaseNotFound = errors.New("knowledge base not found")
+	ErrIngestionJobNotFound  = errors.New("ingestion job not found")
+)
 
 type KnowledgeBaseGetter interface {
 	Get(ctx context.Context, id string) (*domain.KnowledgeBase, error)
@@ -32,6 +35,8 @@ type DocumentRepository interface {
 type IngestionJobRepository interface {
 	Create(ctx context.Context, job domain.IngestionJob) error
 	Update(ctx context.Context, job domain.IngestionJob) error
+	ListByKB(ctx context.Context, kbID string) ([]domain.IngestionJob, error)
+	GetByID(ctx context.Context, kbID, jobID string) (*domain.IngestionJob, error)
 }
 
 type UploadResult struct {
@@ -42,22 +47,43 @@ type UploadResult struct {
 }
 
 type Service struct {
-	logger    *slog.Logger
-	kbGetter  KnowledgeBaseGetter
-	docRepo   DocumentRepository
-	jobRepo   IngestionJobRepository
-	fileStore *filestore.Store
-	worker    *Worker
+	logger        *slog.Logger
+	kbGetter      KnowledgeBaseGetter
+	docRepo       DocumentRepository
+	jobRepo       IngestionJobRepository
+	fileStore     *filestore.Store
+	worker        *Worker
+	broker        *JobBroker
+	queue         chan JobTask
+	workerCount   int
+	startedWorker bool
 }
 
-func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo DocumentRepository, jobRepo IngestionJobRepository, fileStore *filestore.Store, worker *Worker) *Service {
+func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo DocumentRepository, jobRepo IngestionJobRepository, fileStore *filestore.Store, worker *Worker, broker *JobBroker, workerCount int) *Service {
+	if workerCount <= 0 {
+		workerCount = 1
+	}
 	return &Service{
-		logger:    logger,
-		kbGetter:  kbGetter,
-		docRepo:   docRepo,
-		jobRepo:   jobRepo,
-		fileStore: fileStore,
-		worker:    worker,
+		logger:      logger,
+		kbGetter:    kbGetter,
+		docRepo:     docRepo,
+		jobRepo:     jobRepo,
+		fileStore:   fileStore,
+		worker:      worker,
+		broker:      broker,
+		queue:       make(chan JobTask, max(workerCount*4, 8)),
+		workerCount: workerCount,
+	}
+}
+
+func (s *Service) Start(ctx context.Context) {
+	if s.startedWorker {
+		return
+	}
+	s.startedWorker = true
+
+	for i := 0; i < s.workerCount; i++ {
+		go s.runWorker(ctx, i+1)
 	}
 }
 
@@ -70,6 +96,46 @@ func (s *Service) ListDocuments(ctx context.Context, kbID string) ([]domain.Docu
 		return nil, ErrKnowledgeBaseNotFound
 	}
 	return s.docRepo.ListByKB(ctx, kbID)
+}
+
+func (s *Service) ListJobs(ctx context.Context, kbID string) ([]domain.IngestionJob, error) {
+	kb, err := s.kbGetter.Get(ctx, kbID)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, ErrKnowledgeBaseNotFound
+	}
+	return s.jobRepo.ListByKB(ctx, kbID)
+}
+
+func (s *Service) GetJob(ctx context.Context, kbID, jobID string) (*domain.IngestionJob, error) {
+	kb, err := s.kbGetter.Get(ctx, kbID)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, ErrKnowledgeBaseNotFound
+	}
+
+	job, err := s.jobRepo.GetByID(ctx, kbID, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if job == nil {
+		return nil, ErrIngestionJobNotFound
+	}
+	return job, nil
+}
+
+func (s *Service) SubscribeJob(ctx context.Context, kbID, jobID string) (*domain.IngestionJob, <-chan JobEvent, func(), error) {
+	job, err := s.GetJob(ctx, kbID, jobID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	events, cancel := s.broker.Subscribe(jobID)
+	return job, events, cancel, nil
 }
 
 func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart.FileHeader) (UploadResult, error) {
@@ -122,6 +188,7 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		if err := s.jobRepo.Create(ctx, job); err != nil {
 			return UploadResult{}, err
 		}
+		s.publish(job, *existing, "completed", "same file hash, upload skipped")
 		return UploadResult{
 			Document: *existing,
 			Job:      &job,
@@ -193,31 +260,78 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		}
 	}
 
+	task := JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace}
+	s.queue <- task
+	s.publish(job, doc, "queued", "upload accepted")
+	if existing != nil {
+		s.logger.Warn("document_replace_vector_cleanup_deferred",
+			"kb_id", kbID,
+			"document_id", doc.ID,
+			"display_name", doc.DisplayName,
+		)
+	}
+
+	return UploadResult{Document: doc, Job: &job}, nil
+}
+
+func (s *Service) runWorker(ctx context.Context, workerID int) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task := <-s.queue:
+			s.processTask(ctx, workerID, task)
+		}
+	}
+}
+
+func (s *Service) processTask(ctx context.Context, workerID int, task JobTask) {
+	doc := task.Document
+	job := task.Job
+
 	started := time.Now().UTC()
 	job.Status = "running"
 	job.StartedAt = &started
+	job.ErrorMessage = ""
 	if err := s.jobRepo.Update(ctx, job); err != nil {
-		return UploadResult{}, err
+		s.logger.Error("ingest_job_update_failed", "job_id", job.ID, "worker_id", workerID, "error", err)
+		return
 	}
+	s.publish(job, doc, "running", "ingestion started")
 
-	if err := s.worker.Process(ctx, &doc); err != nil {
+	// load doc, chunk, index, upsert
+	processedDoc, err := s.worker.Process(ctx, task)
+	if err != nil {
 		doc.Status = "error"
 		doc.ErrorMessage = err.Error()
 		doc.UpdatedAt = time.Now().UTC()
-		_ = s.docRepo.Update(ctx, doc)
+		if updateErr := s.docRepo.Update(ctx, doc); updateErr != nil {
+			s.logger.Error("document_update_failed", "job_id", job.ID, "document_id", doc.ID, "worker_id", workerID, "error", updateErr)
+		}
 
 		finished := time.Now().UTC()
 		job.Status = "failed"
 		job.FailedItems = 1
 		job.ErrorMessage = err.Error()
 		job.FinishedAt = &finished
-		_ = s.jobRepo.Update(ctx, job)
-		return UploadResult{Document: doc, Job: &job}, err
+		if updateErr := s.jobRepo.Update(ctx, job); updateErr != nil {
+			s.logger.Error("ingest_job_update_failed", "job_id", job.ID, "worker_id", workerID, "error", updateErr)
+		}
+		s.publish(job, doc, "failed", err.Error())
+		return
 	}
 
-	doc.UpdatedAt = time.Now().UTC()
-	if err := s.docRepo.Update(ctx, doc); err != nil {
-		return UploadResult{}, err
+	processedDoc.UpdatedAt = time.Now().UTC()
+	if err := s.docRepo.Update(ctx, processedDoc); err != nil {
+		s.logger.Error("document_update_failed", "job_id", job.ID, "document_id", processedDoc.ID, "worker_id", workerID, "error", err)
+		finished := time.Now().UTC()
+		job.Status = "failed"
+		job.FailedItems = 1
+		job.ErrorMessage = err.Error()
+		job.FinishedAt = &finished
+		_ = s.jobRepo.Update(ctx, job)
+		s.publish(job, processedDoc, "failed", err.Error())
+		return
 	}
 
 	finished := time.Now().UTC()
@@ -225,17 +339,30 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 	job.ProcessedItems = 1
 	job.FinishedAt = &finished
 	if err := s.jobRepo.Update(ctx, job); err != nil {
-		return UploadResult{}, err
+		s.logger.Error("ingest_job_update_failed", "job_id", job.ID, "worker_id", workerID, "error", err)
+		return
 	}
 
-	s.logger.Info("document_ingested_dry_run",
-		"kb_id", kb.ID,
-		"document_id", doc.ID,
-		"display_name", doc.DisplayName,
-		"chunk_count", doc.ChunkCount,
+	s.logger.Info("document_ingested",
+		"kb_id", processedDoc.KBID,
+		"document_id", processedDoc.ID,
+		"display_name", processedDoc.DisplayName,
+		"chunk_count", processedDoc.ChunkCount,
+		"job_id", job.ID,
+		"worker_id", workerID,
 	)
+	s.publish(job, processedDoc, "completed", "ingestion completed")
+}
 
-	return UploadResult{Document: doc, Job: &job}, nil
+func (s *Service) publish(job domain.IngestionJob, doc domain.Document, eventType, message string) {
+	s.broker.Publish(JobEvent{
+		Type:           eventType,
+		Job:            job,
+		DocumentID:     doc.ID,
+		DocumentStatus: doc.Status,
+		Message:        message,
+		At:             time.Now().UTC(),
+	})
 }
 
 func normalizeName(name string) string {

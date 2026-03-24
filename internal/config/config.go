@@ -17,6 +17,7 @@ type Config struct {
 	EmbeddingModelName  string
 	EmbeddingEndpoint   string
 	ChromaURL           string
+	ChromaCollection    string
 	RAGTopK             int
 	RAGScoreThreshold   float64
 	ChunkSize           int
@@ -47,6 +48,7 @@ func Load() (Config, error) {
 		EmbeddingModelName:  getEnv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
 		EmbeddingEndpoint:   getEnv("EMBEDDING_ENDPOINT", "http://localhost:8081"),
 		ChromaURL:           getEnv("CHROMA_URL", "http://localhost:8000"),
+		ChromaCollection:    getEnv("CHROMA_COLLECTION", "knowledge_base_rag"),
 		RAGTopK:             getEnvInt("RAG_TOP_K", 6),
 		RAGScoreThreshold:   getEnvFloat64("RAG_SCORE_THRESHOLD", 0.2),
 		ChunkSize:           getEnvInt("CHUNK_SIZE", 800),

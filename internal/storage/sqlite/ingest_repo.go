@@ -2,7 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"knowledge_base_RAG/internal/domain"
@@ -82,4 +84,49 @@ WHERE id = %s;`,
 		sqlQuote(job.ID),
 	)
 	return execSQL(ctx, r.dbPath, query)
+}
+
+func (r *IngestRepo) ListByKB(ctx context.Context, kbID string) ([]domain.IngestionJob, error) {
+	query := fmt.Sprintf(`
+SELECT id, kb_id, trigger_type, status, total_items, processed_items, skipped_items,
+       failed_items, error_message, created_at, started_at, finished_at
+FROM ingestion_jobs
+WHERE kb_id = %s
+ORDER BY created_at DESC;`, sqlQuote(kbID))
+	return r.queryMany(ctx, query)
+}
+
+func (r *IngestRepo) GetByID(ctx context.Context, kbID, jobID string) (*domain.IngestionJob, error) {
+	query := fmt.Sprintf(`
+SELECT id, kb_id, trigger_type, status, total_items, processed_items, skipped_items,
+       failed_items, error_message, created_at, started_at, finished_at
+FROM ingestion_jobs
+WHERE kb_id = %s
+  AND id = %s
+LIMIT 1;`, sqlQuote(kbID), sqlQuote(jobID))
+
+	items, err := r.queryMany(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+func (r *IngestRepo) queryMany(ctx context.Context, query string) ([]domain.IngestionJob, error) {
+	out, err := execSQLiteJSON(ctx, r.dbPath, query)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out) == "" {
+		return []domain.IngestionJob{}, nil
+	}
+
+	var items []domain.IngestionJob
+	if err := json.Unmarshal([]byte(out), &items); err != nil {
+		return nil, fmt.Errorf("unmarshal ingestion jobs: %w", err)
+	}
+	return items, nil
 }

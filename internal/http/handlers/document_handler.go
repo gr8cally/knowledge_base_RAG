@@ -54,6 +54,7 @@ func (h *DocumentHandler) UploadAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := make([]ingest.UploadResult, 0, len(files))
+	accepted := false
 	for _, header := range files {
 		result, err := h.service.UploadFile(r.Context(), r.PathValue("kbID"), header)
 		if err != nil {
@@ -64,8 +65,15 @@ func (h *DocumentHandler) UploadAPI(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusBadRequest, "upload_failed", err.Error())
 			return
 		}
+		if !result.Skipped {
+			accepted = true
+		}
 		results = append(results, result)
 	}
 
-	writeJSON(w, http.StatusOK, results)
+	status := http.StatusOK
+	if accepted {
+		status = http.StatusAccepted
+	}
+	writeJSON(w, status, results)
 }
