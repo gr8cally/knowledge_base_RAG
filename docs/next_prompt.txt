@@ -35,7 +35,7 @@ GO-SPECIFIC CONSTRAINTS (must be reflected in prerequisites and tasks):
 - `templ generate` must run before every `go build`. Include this in all build steps.
 - External services required before any vector or embedding operation:
     - Chroma vector DB assume this is already running, user will be responsible for this
-    - HuggingFace embedding server at `EMBEDDING_ENDPOINT` (flag setup steps explicitly)
+    - HuggingFace embedding endpoint at `EMBEDDING_ENDPOINT` (flag setup steps explicitly)
 - SQLite is file-based; no external service needed.
 - LangChainGo LLM client uses the OpenAI provider pointed at OpenRouter — no custom LLM package.
 - LangChainGo sqlite3 memory (`memory/sqlite3`) manages its own `langchaingo_messages` table

@@ -9,15 +9,16 @@
 ### LangChainGo out-of-the-box (use directly)
 
 1. Document loading and splitting:
-   - `documentloaders.NewPDF`, `NewText`, `NewHTML`, `NewCSV`
-   - `LoadAndSplit(ctx, splitter)`
+   - `documentloaders.NewPDF`, `NewText`, `NewHTML`
+   - `Load(ctx)` when extraction and chunking are separate steps
+   - `LoadAndSplit(ctx, splitter)` only when the loader itself should own splitting
 2. Text splitters:
    - Recursive/character-based splitters for chunking
 3. Embedding abstraction:
    - `embeddings.Embedder` interface (plug-in model/provider)
 4. Vector storage:
-   - Chroma vector store integration
-   - `vectorstores.WithNameSpace(kb.Namespace)` selects the per-KB collection for every read/write operation
+   - Chroma vector store integration from LangChainGo
+   - `vectorstores.WithNameSpace(kb.Namespace)` scopes read/write operations per KB
 5. RAG retrieval chain:
    - `chains.NewConversationalRetrievalQA`
    - `ReturnSourceDocuments = true` for citations
@@ -37,6 +38,10 @@
 7. HTTP handlers, HTMX interactions, streaming endpoints, and Templ views
 8. Ingestion worker queue and progress reporting
 9. Security controls (upload validation, URL fetch protections, path sanitization)
+
+Rule:
+1. If LangChainGo already provides a loader, splitter, vector store, retriever, chain, or memory primitive needed by the brief, use it directly or wrap it thinly for configuration only.
+2. Custom code is allowed only for application-specific orchestration, persistence, dedupe/replace policy, OCR, and UI concerns.
 
 ---
 
@@ -78,8 +83,7 @@
 │   │   ├── worker.go
 │   │   ├── loader_factory.go
 │   │   ├── ocr.go
-│   │   ├── hasher.go
-│   │   └── chunker.go
+│   │   └── hasher.go
 │   ├── rag/
 │   │   ├── chain.go
 │   │   ├── retriever.go
@@ -89,7 +93,7 @@
 │   ├── embeddings/
 │   │   └── provider.go          -- factory only; wraps langchaingo huggingface embedder
 │   ├── vector/
-│   │   └── chroma.go
+│   │   └── chroma.go          -- thin LangChainGo Chroma factory/wrapper only
 │   ├── http/
 │   │   ├── router.go
 │   │   ├── middleware/
@@ -146,7 +150,7 @@ CREATE TABLE knowledge_bases (
   id          TEXT PRIMARY KEY,           -- ULID/UUID
   name        TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  namespace   TEXT NOT NULL,              -- Chroma collection name for this KB: 'kb_' || id
+  namespace   TEXT NOT NULL,              -- LangChainGo vectorstore namespace for this KB: 'kb_' || id
   created_at  DATETIME NOT NULL,
   updated_at  DATETIME NOT NULL,
   archived_at DATETIME
@@ -248,7 +252,7 @@ Defaults:
 1. Server bind: `:8080`
 2. SQLite path: `./data/sqlite/app.db`
 3. Chroma URL: `http://localhost:8000`
-4. Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+4. Embedding model: `BAAI/bge-small-en-v1.5`
 
 ### 4.2 File Storage
 
@@ -286,8 +290,9 @@ Loader selection (by MIME/extension):
 2. `.md` / `.txt`: `documentloaders.NewText`
 3. URL: HTTP fetch → sanitize HTML → `documentloaders.NewHTML`
 4. Images / scanned PDFs: Tesseract OCR wrapper; record `parser_used='ocr'` on the document row.
+5. CSV is not part of MVP scope because it is not required by the assignment brief, even though LangChainGo has a CSV loader.
 
-OCR is a single call to the system Tesseract binary. No sidecar artifacts — extracted text is passed directly to the chunker.
+OCR is a single call to the system Tesseract binary. No sidecar artifacts — extracted text is passed directly to the LangChainGo text splitter.
 
 ### 4.5 Chunking + Embeddings
 
@@ -299,17 +304,19 @@ Chunking defaults:
 Embedding:
 1. `embeddings/provider.go` exposes a single factory function returning a `embeddings.Embedder`.
 2. Internally uses `embeddings/huggingface.NewHuggingface(WithModel(...), WithClient(...))` from langchaingo — no custom embedding code.
-3. Default model: `sentence-transformers/all-MiniLM-L6-v2` via `EMBEDDING_ENDPOINT`.
+3. Default model: `BAAI/bge-small-en-v1.5` via `EMBEDDING_ENDPOINT`.
 4. Batch embeddings; retry transient failures with simple linear backoff (3 attempts).
+5. Chunking uses a LangChainGo text splitter; do not maintain a separate custom chunker implementation.
 
 ### 4.6 Vector Store (Chroma)
 
-1. One Chroma collection per KB, named `kb_<id>` (stored in `knowledge_bases.namespace`, set at KB creation, never changed).
-2. `vectorstores.WithNameSpace(kb.Namespace)` selects the correct collection for every read and write — no metadata filtering needed for KB isolation.
-3. On single document delete or replace: delete that document's vectors from the collection by `document_id` metadata filter, then reinsert if replacing.
+1. Use LangChainGo's Chroma vector store integration directly.
+2. Use one application collection and scope documents by `vectorstores.WithNameSpace(kb.Namespace)`.
+3. `knowledge_bases.namespace` stores the KB namespace string (`kb_<id>`), not a standalone Chroma collection name.
+4. On single document delete or replace: delete that document's vectors from the store by document metadata or deterministic IDs, then reinsert if replacing.
 4. On re-index all:
-   - Drop the KB's Chroma collection entirely.
-   - Recreate the collection and reprocess all `ready` documents from their stored files, ignoring hash checks.
+   - Clear that KB namespace from the shared Chroma store.
+   - Reprocess all `ready` documents from their stored files, ignoring hash checks.
    - Brief downtime during rebuild is acceptable (single-user app, eval context).
 
 ### 4.7 RAG Chain
@@ -325,7 +332,7 @@ openai.New(
 Streaming is handled via langchaingo's built-in callback system — no custom streaming code.
 
 Per chat request:
-1. Build retriever scoped to KB namespace (top-k = `RAG_TOP_K`).
+1. Build retriever from the LangChainGo Chroma store scoped with `vectorstores.WithNameSpace(kb.Namespace)` (top-k = `RAG_TOP_K`).
 2. Create `ConversationalRetrievalQA` chain with `ReturnSourceDocuments = true`.
 3. Provide recent chat history (last N turns) from SQLite.
 4. Stream answer tokens to client via SSE.
@@ -434,7 +441,7 @@ Tech: Templ-rendered HTML + HTMX interactions + Alpine.js local state. No JS bui
 11. Extract text; run OCR if PDF text is below threshold.
 12. Split into chunks with metadata.
 13. Generate embeddings in batches.
-14. Insert vectors into Chroma under KB namespace.
+14. Insert vectors through LangChainGo's Chroma vector store using `vectorstores.WithNameSpace(kb.Namespace)`.
 
 ### E. Finalize
 
@@ -446,7 +453,7 @@ Tech: Templ-rendered HTML + HTMX interactions + Alpine.js local state. No JS bui
 
 18. Acquire in-memory per-KB mutex (reject concurrent reindex for same KB).
 19. Create `ingestion_jobs` row (`trigger_type='reindex_all'`, `status='running'`, `total_items=N`).
-20. Drop the KB's Chroma collection entirely; recreate it empty.
+20. Clear the KB namespace in the shared Chroma store.
 21. For each `ready` document in KB: parse → chunk → embed → insert (ignoring hash checks).
     - On success: `processed_items++`.
     - On failure: set `documents.status='error'`, `failed_items++`.
@@ -461,7 +468,7 @@ Tech: Templ-rendered HTML + HTMX interactions + Alpine.js local state. No JS bui
 2. User sends a question.
 3. Persist user message to `messages` immediately.
 4. Load last `CHAT_HISTORY_MAX_TURNS` messages from SQLite for the conversation.
-5. Build the KB's Chroma retriever using `vectorstores.WithNameSpace(kb.Namespace)` to scope to the correct collection.
+5. Build the KB's Chroma retriever using `vectorstores.WithNameSpace(kb.Namespace)` to scope to the correct namespace.
 6. Initialize `ConversationalRetrievalQA` chain with `ReturnSourceDocuments=true`.
 7. Chain condenses follow-up question using chat history into a standalone query.
 8. Retriever fetches top-k chunks from Chroma.
@@ -551,8 +558,8 @@ MODEL_NAME=nvidia/nemotron-3-nano-30b-a3b:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Embeddings
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_ENDPOINT=http://localhost:8081
+EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
+EMBEDDING_ENDPOINT=https://router.huggingface.co/hf-inference
 
 # Vector DB
 CHROMA_URL=http://localhost:8000

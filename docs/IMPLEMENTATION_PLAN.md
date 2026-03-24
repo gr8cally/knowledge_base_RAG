@@ -35,12 +35,14 @@ This plan converts [PROJECT_SPEC.md](./PROJECT_SPEC.md) into an execution roadma
 4. Migration approach: custom in-process SQL runner in `internal/storage/sqlite/db.go` (no third-party migration dependency).
 5. LLM provider: LangChainGo OpenAI-compatible client pointed to OpenRouter.
 6. Embeddings: LangChainGo HuggingFace embedder via `EMBEDDING_ENDPOINT`.
-7. Vector store isolation: Chroma collection per KB (`kb_<kb_id>`), selected via `vectorstores.WithNameSpace(kb.Namespace)`.
+7. Vector store isolation: use LangChainGo's Chroma store directly and scope every read/write with `vectorstores.WithNameSpace(kb.Namespace)`.
 8. Persistence split:
    - App UX data in our tables (`knowledge_bases`, `documents`, `conversations`, `messages`, `message_citations`, `ingestion_jobs`).
    - LangChainGo memory data in `langchaingo_messages` (same SQLite file, separate concern).
 9. Frontend stack: Templ + HTMX + Alpine.js only; no JS build step.
 10. Path style in this plan: repository-relative paths only.
+11. Framework-first rule: if LangChainGo already provides the loader, splitter, vector store, retriever, chain, or memory primitive needed for the brief, use it directly or wrap it thinly for configuration only.
+12. MVP file scope rule: only the assignment-brief formats are in scope for ingestion: PDF, Markdown, text, scanned documents, and optional web pages.
 
 ## 5. Open Questions
 1. `DELETE /api/kbs/{kbID}` archives KBs; should archived KBs be API-readable but non-writable, or fully hidden except admin/debug contexts?
@@ -48,6 +50,7 @@ This plan converts [PROJECT_SPEC.md](./PROJECT_SPEC.md) into an execution roadma
 3. URL identity normalization for dedupe (`normalized_name`) is unspecified for URL docs (full URL vs canonicalized host/path/query rules).
 4. OCR binary resolution is unspecified: use system `tesseract` from `$PATH` only, or add explicit env config for binary path.
 5. Ingestion worker lifecycle strategy is unspecified: always-on goroutine at server boot vs lazy-start per job.
+6. Pinned LangChainGo Chroma wrapper may not expose document-level delete/upsert needed for Phase 5 replace/delete semantics; if confirmed, keep custom fallback limited to that narrow lifecycle gap only.
 
 ## 6. Phase 0 — Runtime Bootstrap (Merged)
 
@@ -321,8 +324,8 @@ Isolate and validate file intake, hashing, loader selection, OCR fallback routin
 1. Document + ingestion-job domain/repositories.
 2. File storage service and path policy.
 3. SHA-256 hasher and dedupe/replace decision logic.
-4. Loader factory + chunker pipeline.
-5. Worker dry-run mode that parses/chunks and logs chunk summary (no embedding/chroma calls yet).
+4. Loader factory + LangChainGo text splitter pipeline.
+5. Worker dry-run mode that parses/splits and logs chunk summary (no embedding/chroma calls yet).
 
 ### Scope out
 1. Embedding generation.
@@ -342,12 +345,11 @@ Isolate and validate file intake, hashing, loader selection, OCR fallback routin
 6. `internal/storage/filestore/paths.go`
 7. `internal/ingest/hasher.go`
 8. `internal/ingest/loader_factory.go`
-9. `internal/ingest/chunker.go`
-10. `internal/ingest/ocr.go`
-11. `internal/ingest/service.go`
-12. `internal/ingest/worker.go`
-13. `internal/http/handlers/document_handler.go`
-14. `internal/http/router.go`
+9. `internal/ingest/ocr.go`
+10. `internal/ingest/service.go`
+11. `internal/ingest/worker.go`
+12. `internal/http/handlers/document_handler.go`
+13. `internal/http/router.go`
 
 ### Step-by-step tasks
 1. Implement document repository methods for:
@@ -364,22 +366,24 @@ Isolate and validate file intake, hashing, loader selection, OCR fallback routin
    - apply dedupe/replace decision
    - enqueue dry-run ingest job
 5. Implement dry-run worker path:
-   - parse and chunk
+   - parse with LangChainGo loaders
+   - split with LangChainGo text splitter
    - update `chunk_count`
    - log chunk summary to stdout
    - set document status `ready` when parse/chunk succeeds
-6. Verify dry-run behavior:
+6. Keep Phase 4A file support limited to assignment-brief types only.
+7. Verify dry-run behavior:
 ```bash
 templ generate
 go build ./cmd/server
 go run ./cmd/server
 curl -i -F "files=@./README.md" http://localhost:8080/api/kbs/<KB_ID>/documents/upload
 ```
-7. Check logs for chunk output and DB state:
+8. Check logs for chunk output and DB state:
 ```bash
 sqlite3 ./data/sqlite/app.db "SELECT display_name, chunk_count, status FROM documents WHERE kb_id='<KB_ID>';"
 ```
-8. Verify different-hash replace path (same filename, changed content):
+9. Verify different-hash replace path (same filename, changed content):
 ```bash
 printf "v1 content\n" > /tmp/replace-check.txt
 curl -i -F "files=@/tmp/replace-check.txt;filename=replace-check.txt" http://localhost:8080/api/kbs/<KB_ID>/documents/upload
@@ -406,7 +410,7 @@ Phase 4B replaces dry-run worker path with full embedding + Chroma indexing whil
 ## 11. Phase 4B — Upload-to-Index Slice (Embedding + Chroma Integration)
 
 ### Objective
-Complete the document ingestion vertical slice by adding embeddings and Chroma indexing to the already-validated parsing pipeline.
+Complete the document ingestion vertical slice by adding embeddings and LangChainGo Chroma indexing to the already-validated parsing pipeline.
 
 ### Spec references
 1. `4.3 Ingestion Service`
@@ -419,7 +423,7 @@ Complete the document ingestion vertical slice by adding embeddings and Chroma i
 
 ### Scope in
 1. Embed chunks via HuggingFace endpoint.
-2. Insert vectors into KB-scoped Chroma collection.
+2. Insert vectors through LangChainGo's Chroma store, scoped by `vectorstores.WithNameSpace(kb.Namespace)`.
 3. Add ingestion job status endpoints + SSE progress stream.
 4. Connect document tab UI for upload/status/progress.
 
@@ -447,16 +451,19 @@ Complete the document ingestion vertical slice by adding embeddings and Chroma i
 
 ### Step-by-step tasks
 1. Replace dry-run worker step with full pipeline:
-   - parse/chunk (existing)
+   - parse with LangChainGo loaders
+   - split with LangChainGo text splitter
    - embed chunks
-   - upsert vectors into KB collection
+   - write vectors through LangChainGo Chroma store
 2. Ensure metadata includes `kb_id`, `document_id`, `source_label`, `chunk_index`.
-3. Expose ingestion job APIs:
+3. Keep supported file types limited to the assignment brief; do not add CSV support.
+4. Use custom Chroma code only if a specific required operation is not exposed by the pinned LangChainGo wrapper; if that happens, document the exact API gap before coding around it.
+5. Expose ingestion job APIs:
    - `GET /api/kbs/{kbID}/ingestion-jobs`
    - `GET /api/kbs/{kbID}/ingestion-jobs/{jobID}`
    - `GET /api/kbs/{kbID}/ingestion-jobs/{jobID}/events` (SSE)
-4. Add documents-tab progress rendering via HTMX + SSE.
-5. Verify end-to-end upload-to-index:
+6. Add documents-tab progress rendering via HTMX + SSE.
+7. Verify end-to-end upload-to-index:
 ```bash
 templ generate
 go build ./cmd/server
@@ -469,7 +476,7 @@ curl -s http://localhost:8080/api/kbs/<KB_ID>/documents
 ### Exit gate
 1. Uploaded file reaches `documents.status='ready'` and has non-zero `chunk_count`.
 2. Ingestion job reaches `status='completed'` with `processed_items=1`.
-3. Vectors exist in KB collection and are queryable by retriever setup in Phase 7.
+3. Vectors exist in the LangChainGo Chroma store under the KB namespace and are queryable by retriever setup in Phase 7.
 
 ### Handoff notes
 Phase 5 will reuse vector delete and job orchestration primitives from this phase.
@@ -497,7 +504,7 @@ Deliver operational document controls: hard delete, single-doc refresh, and KB-w
    - re-run ingestion from current file path
 3. Re-index all endpoint:
    - per-KB mutex
-   - drop + recreate KB Chroma collection
+   - clear and rebuild the KB namespace in LangChainGo Chroma
    - reprocess all ready docs
 4. UI actions for delete/refresh/re-index-all.
 
@@ -521,13 +528,13 @@ Deliver operational document controls: hard delete, single-doc refresh, and KB-w
 
 ### Step-by-step tasks
 1. Implement hard delete in a transaction-safe sequence:
-   - unindex vectors by `document_id`
+   - unindex vectors by `document_id` using LangChainGo if available; otherwise use the narrowest possible fallback adapter for delete only
    - remove `storage_path` file
    - remove document row
 2. Implement single-document refresh (`/refresh`) as new ingestion job.
 3. Implement `POST /api/kbs/{kbID}/reindex-all`:
    - reject concurrent same-KB requests (`409`)
-   - drop/recreate collection
+   - clear KB namespace in LangChainGo Chroma
    - iterate docs and ingest
    - update job counters
 4. Expose progress through job endpoints/SSE.
@@ -647,7 +654,7 @@ Deliver complete conversational RAG with follow-up context, SSE token streaming,
 
 ### Prerequisites
 1. Phase 6 complete.
-2. Chroma collection populated for KB.
+2. LangChainGo Chroma store populated for the KB namespace.
 3. Valid OpenRouter credentials.
 4. Open Question #2 resolved (SSE payload contract).
 
@@ -713,6 +720,7 @@ go build ./cmd/server
 5. All file paths must remain under `data/` for persistence operations.
 6. Upload handling must enforce MIME + extension checks and size limits.
 7. Do not introduce features outside [PROJECT_SPEC.md](./PROJECT_SPEC.md); record unresolved gaps under Open Questions.
+8. Before implementing any framework-adjacent component, explicitly map it to a LangChainGo primitive first. Custom code is allowed only after writing down why the library primitive is insufficient for this project.
 
 ## 16. Deferred Backlog
 1. CLI for ingestion, KB management, and non-UI chat.

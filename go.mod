@@ -6,15 +6,20 @@ require github.com/tmc/langchaingo v0.1.14
 
 require (
 	github.com/AssemblyAI/assemblyai-go-sdk v1.3.0 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/PuerkitoBio/goquery v1.8.1 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/yalue/onnxruntime_go v1.19.0 // indirect
 	gitlab.com/golang-commonmark/html v0.0.0-20191124015941-a22733972181 // indirect
 	gitlab.com/golang-commonmark/linkify v0.0.0-20191026162114-a0c2df6c8f82 // indirect
 	gitlab.com/golang-commonmark/markdown v0.0.0-20211110145824-bf3e522c626a // indirect
@@ -27,7 +32,10 @@ require (
 
 require (
 	github.com/a-h/templ v0.3.1001
+	github.com/amikos-tech/chroma-go v0.1.4 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 )
+
+replace github.com/amikos-tech/chroma-go => ./third_party/chroma-go/github.com/amikos-tech/chroma-go@v0.2.5

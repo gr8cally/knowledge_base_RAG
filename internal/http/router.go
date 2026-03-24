@@ -15,6 +15,7 @@ func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.C
 	healthHandler := handlers.NewHealthHandler(sqlitePath, chromaPing)
 	kbHandler := handlers.NewKBHandler(kbService)
 	documentHandler := handlers.NewDocumentHandler(documentService, maxUploadMB)
+	ingestHandler := handlers.NewIngestHandler(documentService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
@@ -27,6 +28,9 @@ func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.C
 	mux.HandleFunc("DELETE /api/kbs/{kbID}", kbHandler.ArchiveAPI)
 	mux.HandleFunc("GET /api/kbs/{kbID}/documents", documentHandler.ListAPI)
 	mux.HandleFunc("POST /api/kbs/{kbID}/documents/upload", documentHandler.UploadAPI)
+	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs", ingestHandler.ListAPI)
+	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs/{jobID}", ingestHandler.GetAPI)
+	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs/{jobID}/events", ingestHandler.Events)
 
 	handler := middleware.Recover(logger)(mux)
 	handler = middleware.Logging(logger)(handler)

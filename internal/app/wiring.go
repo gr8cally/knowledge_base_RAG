@@ -55,13 +55,21 @@ func (d *Dependencies) CheckChroma(ctx context.Context) error {
 	return vector.CheckHealth(ctx, d.Config.ChromaURL, d.HealthHTTPClient)
 }
 
+func (d *Dependencies) NewVectorStore(embedder langchainembeddings.Embedder) (*vector.Store, error) {
+	return vector.NewStore(d.Config.ChromaURL, d.Config.ChromaCollection, embedder, d.InferenceHTTPClient)
+}
+
 func (d *Dependencies) NewKnowledgeBaseService() *KnowledgeBaseService {
 	return NewKnowledgeBaseService(sqlite.NewKnowledgeBaseRepo(d.Config.SQLitePath))
 }
 
-func (d *Dependencies) NewDocumentService(kbService *KnowledgeBaseService) *ingest.Service {
+func (d *Dependencies) NewDocumentService(kbService *KnowledgeBaseService, embedder langchainembeddings.Embedder) (*ingest.Service, error) {
 	fileStore := filestore.New(filepath.Join(d.Config.DataDir, "files"))
-	worker := ingest.NewWorker(d.Logger, d.Config.ChunkSize, d.Config.ChunkOverlap, d.Config.OCREnabled, d.Config.OCRLang)
+	vectorStore, err := d.NewVectorStore(embedder)
+	if err != nil {
+		return nil, err
+	}
+	worker := ingest.NewWorker(d.Logger, d.Config.ChunkSize, d.Config.ChunkOverlap, d.Config.OCREnabled, d.Config.OCRLang, vectorStore)
 	return ingest.NewService(
 		d.Logger,
 		kbService,
@@ -69,5 +77,7 @@ func (d *Dependencies) NewDocumentService(kbService *KnowledgeBaseService) *inge
 		sqlite.NewIngestRepo(d.Config.SQLitePath),
 		fileStore,
 		worker,
-	)
+		ingest.NewJobBroker(),
+		d.Config.IngestWorkers,
+	), nil
 }

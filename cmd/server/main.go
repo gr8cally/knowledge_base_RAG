@@ -30,7 +30,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if _, err := deps.NewEmbedder(); err != nil {
+	embedder, err := deps.NewEmbedder()
+	if err != nil {
 		logger.Error("failed to initialize embedder", "error", err)
 		os.Exit(1)
 	}
@@ -43,7 +44,13 @@ func main() {
 	}
 
 	kbService := deps.NewKnowledgeBaseService()
-	documentService := deps.NewDocumentService(kbService)
+	documentService, err := deps.NewDocumentService(kbService, embedder)
+	if err != nil {
+		logger.Error("failed to initialize document service", "error", err)
+		os.Exit(1)
+	}
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	documentService.Start(workerCtx)
 	router := httpserver.NewRouter(logger,
 		cfg.SQLitePath,
 		deps.CheckChroma,
@@ -78,6 +85,9 @@ func main() {
 		logger.Error("shutdown failed", "error", err)
 		os.Exit(1)
 	}
+
+	workerCancel()
+	documentService.Wait()
 
 	logger.Info("server stopped")
 }

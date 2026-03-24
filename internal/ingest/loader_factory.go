@@ -37,6 +37,18 @@ func LoadDocument(ctx context.Context, path, mimeType string, ocrEnabled bool, o
 			parser = "markdown"
 		}
 		return LoadResult{Text: joinDocuments(docs), ParserUsed: parser}, nil
+	case ".html", ".htm":
+		f, err := os.Open(path)
+		if err != nil {
+			return LoadResult{}, fmt.Errorf("open html file: %w", err)
+		}
+		defer f.Close()
+
+		docs, err := documentloaders.NewHTML(f).Load(ctx)
+		if err != nil {
+			return LoadResult{}, fmt.Errorf("langchaingo html loader failed: %w", err)
+		}
+		return LoadResult{Text: joinDocuments(docs), ParserUsed: "html"}, nil
 	case ".pdf":
 		f, err := os.Open(path)
 		if err != nil {

@@ -12,5 +12,7 @@ data/
 internal/web/templates/*_templ.go
 internal/web/templates/components/*_templ.go
 
+third_party/*
+
 # Binaries
 server
