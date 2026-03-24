@@ -82,14 +82,12 @@ func (r *ConversationRepo) Update(ctx context.Context, conv domain.Conversation)
 	query := fmt.Sprintf(`
 UPDATE conversations
 SET title = %s,
-    updated_at = %s,
-    last_message_at = %s
+    updated_at = %s
 WHERE id = %s
   AND kb_id = %s
   AND archived_at IS NULL;`,
 		sqlQuote(conv.Title),
 		sqlQuote(conv.UpdatedAt.Format(time.RFC3339Nano)),
-		lastMessageAt,
 		sqlQuote(conv.ID),
 		sqlQuote(conv.KBID),
 	)
