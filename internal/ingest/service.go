@@ -192,7 +192,6 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 			_ = s.fileStore.Remove(oldStoragePath)
 		}
 	}
-	}
 
 	started := time.Now().UTC()
 	job.Status = "running"

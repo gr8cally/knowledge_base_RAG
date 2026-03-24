@@ -10,6 +10,7 @@ data/
 
 # Generated templ output
 internal/web/templates/*_templ.go
+internal/web/templates/components/*_templ.go
 
 # Binaries
 server
