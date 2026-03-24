@@ -106,7 +106,7 @@ func (s *Store) SimilaritySearch(ctx context.Context, kbNamespace, query string,
 		chroma.WithQueryEmbeddings(chromaemb.NewEmbeddingFromFloat32(queryEmbedding)),
 		chroma.WithNResults(numDocuments),
 		chroma.WithWhereQuery(chroma.EqString(namespaceMetadataKey, kbNamespace)),
-		chroma.WithIncludeQuery(chroma.IncludeDocuments, chroma.IncludeMetadatas),
+		chroma.WithIncludeQuery(chroma.IncludeDocuments, chroma.IncludeMetadatas, chroma.IncludeDistances),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("chroma similarity search: %w", err)
