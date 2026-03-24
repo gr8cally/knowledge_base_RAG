@@ -106,13 +106,48 @@ func (s *Store) SimilaritySearch(ctx context.Context, kbNamespace, query string,
 		chroma.WithQueryEmbeddings(chromaemb.NewEmbeddingFromFloat32(queryEmbedding)),
 		chroma.WithNResults(numDocuments),
 		chroma.WithWhereQuery(chroma.EqString(namespaceMetadataKey, kbNamespace)),
-		chroma.WithIncludeQuery(chroma.IncludeDocuments, chroma.IncludeMetadatas, chroma.IncludeDistances),
+		chroma.WithIncludeQuery(chroma.IncludeDocuments, chroma.IncludeMetadatas, chroma.Include("distances")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("chroma similarity search: %w", err)
 	}
 
 	return queryResultToDocuments(result, scoreThreshold)
+}
+
+func (s *Store) DeleteDocument(ctx context.Context, kbNamespace, documentID string) error {
+	collection, err := s.getCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := collection.Delete(
+		ctx,
+		chroma.WithWhereDelete(chroma.And(
+			chroma.EqString(namespaceMetadataKey, kbNamespace),
+			chroma.EqString("document_id", documentID),
+		)),
+	); err != nil {
+		return fmt.Errorf("delete document from chroma: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteNamespace(ctx context.Context, kbNamespace string) error {
+	collection, err := s.getCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := collection.Delete(
+		ctx,
+		chroma.WithWhereDelete(chroma.EqString(namespaceMetadataKey, kbNamespace)),
+	); err != nil {
+		return fmt.Errorf("delete namespace from chroma: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Store) getCollection(ctx context.Context) (chroma.Collection, error) {

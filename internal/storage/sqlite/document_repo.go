@@ -95,6 +95,26 @@ ORDER BY updated_at DESC;`, sqlQuote(kbID))
 	return r.queryMany(ctx, query)
 }
 
+func (r *DocumentRepo) GetByID(ctx context.Context, kbID, documentID string) (*domain.Document, error) {
+	query := fmt.Sprintf(`
+SELECT id, kb_id, source_type, display_name, normalized_name, source_uri,
+       sha256, storage_path, mime_type, size_bytes, parser_used, chunk_count,
+       status, error_message, created_at, updated_at
+FROM documents
+WHERE kb_id = %s
+  AND id = %s
+LIMIT 1;`, sqlQuote(kbID), sqlQuote(documentID))
+
+	items, err := r.queryMany(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
 func (r *DocumentRepo) FindByKBAndNormalizedName(ctx context.Context, kbID, normalizedName string) (*domain.Document, error) {
 	query := fmt.Sprintf(`
 SELECT id, kb_id, source_type, display_name, normalized_name, source_uri,
@@ -113,6 +133,14 @@ LIMIT 1;`, sqlQuote(kbID), sqlQuote(normalizedName))
 		return nil, nil
 	}
 	return &items[0], nil
+}
+
+func (r *DocumentRepo) Delete(ctx context.Context, kbID, documentID string) error {
+	query := fmt.Sprintf(`
+DELETE FROM documents
+WHERE kb_id = %s
+  AND id = %s;`, sqlQuote(kbID), sqlQuote(documentID))
+	return execSQL(ctx, r.dbPath, query)
 }
 
 func (r *DocumentRepo) queryMany(ctx context.Context, query string) ([]domain.Document, error) {

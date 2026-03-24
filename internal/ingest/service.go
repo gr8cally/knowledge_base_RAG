@@ -19,8 +19,10 @@ import (
 
 var (
 	ErrKnowledgeBaseNotFound = errors.New("knowledge base not found")
+	ErrDocumentNotFound      = errors.New("document not found")
 	ErrIngestionJobNotFound  = errors.New("ingestion job not found")
 	ErrIngestionQueueFull    = errors.New("ingestion queue full")
+	ErrReindexInProgress     = errors.New("reindex already in progress")
 )
 
 type KnowledgeBaseGetter interface {
@@ -31,7 +33,9 @@ type DocumentRepository interface {
 	Create(ctx context.Context, doc domain.Document) error
 	Update(ctx context.Context, doc domain.Document) error
 	ListByKB(ctx context.Context, kbID string) ([]domain.Document, error)
+	GetByID(ctx context.Context, kbID, documentID string) (*domain.Document, error)
 	FindByKBAndNormalizedName(ctx context.Context, kbID, normalizedName string) (*domain.Document, error)
+	Delete(ctx context.Context, kbID, documentID string) error
 }
 
 type IngestionJobRepository interface {
@@ -63,6 +67,9 @@ type Service struct {
 	mu            sync.RWMutex
 	wg            sync.WaitGroup
 	stopOnce      sync.Once
+	taskCtx       context.Context
+	reindexMu     sync.Mutex
+	reindexingKBs map[string]struct{}
 }
 
 func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo DocumentRepository, jobRepo IngestionJobRepository, fileStore *filestore.Store, worker *Worker, broker *JobBroker, workerCount int) *Service {
@@ -70,16 +77,18 @@ func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo Docum
 		workerCount = 1
 	}
 	return &Service{
-		logger:      logger,
-		kbGetter:    kbGetter,
-		docRepo:     docRepo,
-		jobRepo:     jobRepo,
-		fileStore:   fileStore,
-		worker:      worker,
-		broker:      broker,
-		queue:       make(chan JobTask, max(workerCount*4, 8)),
-		workerCount: workerCount,
-		accepting:   true,
+		logger:        logger,
+		kbGetter:      kbGetter,
+		docRepo:       docRepo,
+		jobRepo:       jobRepo,
+		fileStore:     fileStore,
+		worker:        worker,
+		broker:        broker,
+		queue:         make(chan JobTask, max(workerCount*4, 8)),
+		workerCount:   workerCount,
+		accepting:     true,
+		taskCtx:       context.Background(),
+		reindexingKBs: make(map[string]struct{}),
 	}
 }
 
@@ -90,6 +99,7 @@ func (s *Service) Start(ctx context.Context) {
 		return
 	}
 	s.startedWorker = true
+	s.taskCtx = context.WithoutCancel(ctx)
 	s.mu.Unlock()
 
 	for i := 0; i < s.workerCount; i++ {
@@ -114,6 +124,133 @@ func (s *Service) stopAccepting() {
 		close(s.queue)
 		s.mu.Unlock()
 	})
+}
+
+func (s *Service) DeleteDocument(ctx context.Context, kbID, documentID string) error {
+	kb, err := s.kbGetter.Get(ctx, kbID)
+	if err != nil {
+		return err
+	}
+	if kb == nil {
+		return ErrKnowledgeBaseNotFound
+	}
+
+	doc, err := s.docRepo.GetByID(ctx, kbID, documentID)
+	if err != nil {
+		return err
+	}
+	if doc == nil {
+		return ErrDocumentNotFound
+	}
+
+	if err := s.worker.indexer.DeleteDocument(ctx, kb.Namespace, doc.ID); err != nil {
+		return err
+	}
+	if err := s.fileStore.Remove(doc.StoragePath); err != nil {
+		return err
+	}
+	if err := s.docRepo.Delete(ctx, kbID, doc.ID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) RefreshDocument(ctx context.Context, kbID, documentID string) (UploadResult, error) {
+	kb, err := s.kbGetter.Get(ctx, kbID)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	if kb == nil {
+		return UploadResult{}, ErrKnowledgeBaseNotFound
+	}
+
+	doc, err := s.docRepo.GetByID(ctx, kbID, documentID)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	if doc == nil {
+		return UploadResult{}, ErrDocumentNotFound
+	}
+
+	now := time.Now().UTC()
+	doc.Status = "processing"
+	doc.ErrorMessage = ""
+	doc.ParserUsed = ""
+	doc.ChunkCount = 0
+	doc.UpdatedAt = now
+	if err := s.docRepo.Update(ctx, *doc); err != nil {
+		return UploadResult{}, err
+	}
+	if err := s.worker.indexer.DeleteDocument(ctx, kb.Namespace, doc.ID); err != nil {
+		return UploadResult{}, err
+	}
+
+	job := domain.IngestionJob{
+		ID:             uuid.NewString(),
+		KBID:           kbID,
+		TriggerType:    "refresh_document",
+		Status:         "queued",
+		TotalItems:     1,
+		ProcessedItems: 0,
+		SkippedItems:   0,
+		FailedItems:    0,
+		ErrorMessage:   "",
+		CreatedAt:      now,
+	}
+	if err := s.jobRepo.Create(ctx, job); err != nil {
+		return UploadResult{}, err
+	}
+
+	if err := s.enqueueTask(ctx, JobTask{Job: job, Document: *doc, KBNamespace: kb.Namespace}); err != nil {
+		return UploadResult{}, err
+	}
+	s.publish(job, *doc, "queued", "refresh accepted")
+
+	return UploadResult{Document: *doc, Job: &job}, nil
+}
+
+func (s *Service) ReindexAll(ctx context.Context, kbID string) (*domain.IngestionJob, error) {
+	kb, err := s.kbGetter.Get(ctx, kbID)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, ErrKnowledgeBaseNotFound
+	}
+
+	if !s.beginReindex(kbID) {
+		return nil, ErrReindexInProgress
+	}
+
+	docs, err := s.docRepo.ListByKB(ctx, kbID)
+	if err != nil {
+		s.endReindex(kbID)
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	job := domain.IngestionJob{
+		ID:             uuid.NewString(),
+		KBID:           kbID,
+		TriggerType:    "reindex_all",
+		Status:         "queued",
+		TotalItems:     len(docs),
+		ProcessedItems: 0,
+		SkippedItems:   0,
+		FailedItems:    0,
+		ErrorMessage:   "",
+		CreatedAt:      now,
+	}
+	if err := s.jobRepo.Create(ctx, job); err != nil {
+		s.endReindex(kbID)
+		return nil, err
+	}
+
+	s.wg.Add(1)
+	go s.runReindexAll(job, *kb, docs)
+
+	return &job, nil
 }
 
 func (s *Service) ListDocuments(ctx context.Context, kbID string) ([]domain.Document, error) {
@@ -288,52 +425,62 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		if oldStoragePath != "" {
 			_ = s.fileStore.Remove(oldStoragePath)
 		}
+		if err := s.worker.indexer.DeleteDocument(ctx, kb.Namespace, doc.ID); err != nil {
+			finished := time.Now().UTC()
+			job.Status = "failed"
+			job.FailedItems = 1
+			job.ErrorMessage = err.Error()
+			job.FinishedAt = &finished
+			_ = s.jobRepo.Update(context.Background(), job)
+			return UploadResult{}, err
+		}
 	}
 
-	task := JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace}
+	if err := s.enqueueTask(ctx, JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace}); err != nil {
+		return UploadResult{}, err
+	}
+	s.publish(job, doc, "queued", "upload accepted")
+	return UploadResult{Document: doc, Job: &job}, nil
+}
+
+func (s *Service) enqueueTask(ctx context.Context, task JobTask) error {
 	s.mu.RLock()
 	if !s.accepting {
 		s.mu.RUnlock()
 		finished := time.Now().UTC()
+		job := task.Job
 		job.Status = "failed"
 		job.FailedItems = 1
 		job.ErrorMessage = "ingestion service is shutting down"
 		job.FinishedAt = &finished
 		_ = s.jobRepo.Update(context.Background(), job)
-		return UploadResult{}, fmt.Errorf("%w: service shutting down", ErrIngestionQueueFull)
+		return fmt.Errorf("%w: service shutting down", ErrIngestionQueueFull)
 	}
 	select {
 	case s.queue <- task:
 		s.mu.RUnlock()
+		return nil
 	case <-ctx.Done():
 		s.mu.RUnlock()
 		finished := time.Now().UTC()
+		job := task.Job
 		job.Status = "failed"
 		job.FailedItems = 1
 		job.ErrorMessage = "upload context cancelled before queueing"
 		job.FinishedAt = &finished
 		_ = s.jobRepo.Update(context.Background(), job)
-		return UploadResult{}, fmt.Errorf("%w: upload context cancelled", ErrIngestionQueueFull)
+		return fmt.Errorf("%w: upload context cancelled", ErrIngestionQueueFull)
 	default:
 		s.mu.RUnlock()
 		finished := time.Now().UTC()
+		job := task.Job
 		job.Status = "failed"
 		job.FailedItems = 1
 		job.ErrorMessage = "ingestion queue full"
 		job.FinishedAt = &finished
 		_ = s.jobRepo.Update(context.Background(), job)
-		return UploadResult{}, fmt.Errorf("%w: try again later", ErrIngestionQueueFull)
+		return fmt.Errorf("%w: try again later", ErrIngestionQueueFull)
 	}
-	s.publish(job, doc, "queued", "upload accepted")
-	if existing != nil {
-		s.logger.Warn("document_replace_vector_cleanup_deferred",
-			"kb_id", kbID,
-			"document_id", doc.ID,
-			"display_name", doc.DisplayName,
-		)
-	}
-
-	return UploadResult{Document: doc, Job: &job}, nil
 }
 
 func (s *Service) runWorker(ctx context.Context, workerID int) {
@@ -431,6 +578,115 @@ func (s *Service) publish(job domain.IngestionJob, doc domain.Document, eventTyp
 		Message:        message,
 		At:             time.Now().UTC(),
 	})
+}
+
+func (s *Service) beginReindex(kbID string) bool {
+	s.reindexMu.Lock()
+	defer s.reindexMu.Unlock()
+	if _, exists := s.reindexingKBs[kbID]; exists {
+		return false
+	}
+	s.reindexingKBs[kbID] = struct{}{}
+	return true
+}
+
+func (s *Service) endReindex(kbID string) {
+	s.reindexMu.Lock()
+	delete(s.reindexingKBs, kbID)
+	s.reindexMu.Unlock()
+}
+
+func (s *Service) runReindexAll(job domain.IngestionJob, kb domain.KnowledgeBase, docs []domain.Document) {
+	defer s.wg.Done()
+	defer s.endReindex(kb.ID)
+
+	ctx := s.taskCtx
+	started := time.Now().UTC()
+	job.Status = "running"
+	job.StartedAt = &started
+	job.ErrorMessage = ""
+	if err := s.jobRepo.Update(ctx, job); err != nil {
+		s.logger.Error("reindex_job_update_failed", "job_id", job.ID, "error", err)
+		return
+	}
+	s.publish(job, domain.Document{}, "running", "re-index all started")
+
+	if err := s.worker.indexer.DeleteNamespace(ctx, kb.Namespace); err != nil {
+		finished := time.Now().UTC()
+		job.Status = "failed"
+		job.FailedItems = len(docs)
+		job.ErrorMessage = err.Error()
+		job.FinishedAt = &finished
+		_ = s.jobRepo.Update(ctx, job)
+		s.publish(job, domain.Document{}, "failed", err.Error())
+		return
+	}
+
+	for _, doc := range docs {
+		doc.Status = "processing"
+		doc.ErrorMessage = ""
+		doc.ParserUsed = ""
+		doc.ChunkCount = 0
+		doc.UpdatedAt = time.Now().UTC()
+		if err := s.docRepo.Update(ctx, doc); err != nil {
+			job.FailedItems++
+			job.ErrorMessage = err.Error()
+			continue
+		}
+		s.publish(job, doc, "running", "re-indexing document")
+
+		processedDoc, err := s.worker.Process(ctx, JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace})
+		if err != nil {
+			doc.Status = "error"
+			doc.ErrorMessage = err.Error()
+			doc.UpdatedAt = time.Now().UTC()
+			_ = s.docRepo.Update(ctx, doc)
+			job.FailedItems++
+			job.ErrorMessage = err.Error()
+			if err := s.jobRepo.Update(ctx, job); err != nil {
+				s.logger.Error("reindex_job_update_failed", "job_id", job.ID, "error", err)
+			}
+			s.publish(job, doc, "failed", err.Error())
+			continue
+		}
+
+		processedDoc.UpdatedAt = time.Now().UTC()
+		if err := s.docRepo.Update(ctx, processedDoc); err != nil {
+			processedDoc.Status = "error"
+			processedDoc.ErrorMessage = err.Error()
+			processedDoc.UpdatedAt = time.Now().UTC()
+			_ = s.docRepo.Update(ctx, processedDoc)
+			job.FailedItems++
+			job.ErrorMessage = err.Error()
+			if err := s.jobRepo.Update(ctx, job); err != nil {
+				s.logger.Error("reindex_job_update_failed", "job_id", job.ID, "error", err)
+			}
+			s.publish(job, processedDoc, "failed", err.Error())
+			continue
+		}
+
+		job.ProcessedItems++
+		if err := s.jobRepo.Update(ctx, job); err != nil {
+			s.logger.Error("reindex_job_update_failed", "job_id", job.ID, "error", err)
+		}
+		s.publish(job, processedDoc, "running", "document re-indexed")
+	}
+
+	finished := time.Now().UTC()
+	job.FinishedAt = &finished
+	if job.FailedItems > 0 {
+		job.Status = "failed"
+		if job.ErrorMessage == "" {
+			job.ErrorMessage = "one or more documents failed during re-index"
+		}
+	} else {
+		job.Status = "completed"
+	}
+	if err := s.jobRepo.Update(ctx, job); err != nil {
+		s.logger.Error("reindex_job_update_failed", "job_id", job.ID, "error", err)
+		return
+	}
+	s.publish(job, domain.Document{}, job.Status, "re-index all finished")
 }
 
 func normalizeName(name string) string {
