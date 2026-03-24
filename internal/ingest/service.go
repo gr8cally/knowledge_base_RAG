@@ -185,12 +185,13 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 			return UploadResult{}, err
 		}
 	} else {
-		if err := s.fileStore.Remove(oldStoragePath); err != nil {
-			return UploadResult{}, err
-		}
 		if err := s.docRepo.Update(ctx, doc); err != nil {
 			return UploadResult{}, err
 		}
+		if oldStoragePath != "" {
+			_ = s.fileStore.Remove(oldStoragePath)
+		}
+	}
 	}
 
 	started := time.Now().UTC()
