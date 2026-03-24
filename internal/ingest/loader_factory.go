@@ -9,7 +9,6 @@ import (
 
 	"github.com/tmc/langchaingo/documentloaders"
 	"github.com/tmc/langchaingo/schema"
-	"github.com/tmc/langchaingo/textsplitter"
 )
 
 type LoadResult struct {
@@ -19,10 +18,6 @@ type LoadResult struct {
 
 func LoadDocument(ctx context.Context, path, mimeType string, ocrEnabled bool, ocrLang string) (LoadResult, error) {
 	ext := strings.ToLower(filepath.Ext(path))
-	splitter := textsplitter.NewRecursiveCharacter(
-		textsplitter.WithChunkSize(800),
-		textsplitter.WithChunkOverlap(120),
-	)
 
 	switch ext {
 	case ".txt", ".md", ".markdown":
@@ -32,7 +27,7 @@ func LoadDocument(ctx context.Context, path, mimeType string, ocrEnabled bool, o
 		}
 		defer f.Close()
 
-		docs, err := documentloaders.NewText(f).LoadAndSplit(ctx, splitter)
+		docs, err := documentloaders.NewText(f).Load(ctx)
 		if err != nil {
 			return LoadResult{}, fmt.Errorf("langchaingo text loader failed: %w", err)
 		}
@@ -54,7 +49,7 @@ func LoadDocument(ctx context.Context, path, mimeType string, ocrEnabled bool, o
 			return LoadResult{}, fmt.Errorf("stat pdf file: %w", err)
 		}
 
-		docs, err := documentloaders.NewPDF(f, info.Size()).LoadAndSplit(ctx, splitter)
+		docs, err := documentloaders.NewPDF(f, info.Size()).Load(ctx)
 		if err != nil {
 			return LoadResult{}, fmt.Errorf("langchaingo pdf loader failed: %w", err)
 		}
@@ -76,7 +71,7 @@ func LoadDocument(ctx context.Context, path, mimeType string, ocrEnabled bool, o
 			}
 			defer f.Close()
 
-			docs, err := documentloaders.NewText(f).LoadAndSplit(ctx, splitter)
+			docs, err := documentloaders.NewText(f).Load(ctx)
 			if err != nil {
 				return LoadResult{}, fmt.Errorf("langchaingo text loader failed: %w", err)
 			}

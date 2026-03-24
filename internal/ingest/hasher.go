@@ -7,10 +7,15 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
+	"path/filepath"
 )
 
-func CopyMultipartToTempAndHash(src multipart.File) (string, string, int64, error) {
-	tmp, err := os.CreateTemp("", "kb-upload-*")
+func CopyMultipartToTempAndHash(src multipart.File, tempDir string) (string, string, int64, error) {
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		return "", "", 0, fmt.Errorf("create temp dir: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(tempDir, "kb-upload-*")
 	if err != nil {
 		return "", "", 0, fmt.Errorf("create temp file: %w", err)
 	}
@@ -23,5 +28,5 @@ func CopyMultipartToTempAndHash(src multipart.File) (string, string, int64, erro
 		return "", "", 0, fmt.Errorf("copy upload: %w", err)
 	}
 
-	return tmp.Name(), hex.EncodeToString(hasher.Sum(nil)), written, nil
+	return filepath.Clean(tmp.Name()), hex.EncodeToString(hasher.Sum(nil)), written, nil
 }

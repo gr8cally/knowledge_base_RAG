@@ -87,7 +87,7 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 	}
 	defer src.Close()
 
-	tempPath, sha, size, err := CopyMultipartToTempAndHash(src)
+	tempPath, sha, size, err := CopyMultipartToTempAndHash(src, filepath.Join(s.fileStore.RootDir(), ".tmp"))
 	if err != nil {
 		return UploadResult{}, err
 	}
