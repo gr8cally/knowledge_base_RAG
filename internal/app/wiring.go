@@ -81,3 +81,11 @@ func (d *Dependencies) NewDocumentService(kbService *KnowledgeBaseService, embed
 		d.Config.IngestWorkers,
 	), nil
 }
+
+func (d *Dependencies) NewConversationService(kbService *KnowledgeBaseService) *ConversationService {
+	return NewConversationService(
+		kbService,
+		sqlite.NewConversationRepo(d.Config.SQLitePath),
+		sqlite.NewMessageRepo(d.Config.SQLitePath),
+	)
+}

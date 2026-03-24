@@ -226,7 +226,16 @@ const kbDetailHTML = `<!doctype html>
     </section>
     <section class="card">
       <h2>Conversations</h2>
-      <p class="muted">Conversation management arrives in Phase 6.</p>
+      <div class="stack">
+        <form id="conversation-form">
+          <input id="conversation-title" type="text" placeholder="Conversation title" />
+          <div style="margin-top: 0.75rem;">
+            <button type="submit">New Conversation</button>
+          </div>
+        </form>
+        <div id="conversation-message" class="message muted"></div>
+      </div>
+      <div id="conversations-table" class="muted">Loading conversations…</div>
     </section>
     <section class="card">
       <h2>Settings</h2>
@@ -241,6 +250,10 @@ const kbDetailHTML = `<!doctype html>
     const documentsTable = document.getElementById('documents-table');
     const jobsTable = document.getElementById('jobs-table');
     const reindexAllButton = document.getElementById('reindex-all');
+    const conversationForm = document.getElementById('conversation-form');
+    const conversationTitle = document.getElementById('conversation-title');
+    const conversationMessage = document.getElementById('conversation-message');
+    const conversationsTable = document.getElementById('conversations-table');
 
     function statusClass(value) {
       return 'status ' + String(value || '').toLowerCase();
@@ -295,6 +308,29 @@ const kbDetailHTML = `<!doctype html>
           '<td>' + esc(job.skipped_items) + '</td>' +
           '<td>' + esc(job.failed_items) + '</td>' +
           '<td class="muted">' + esc(job.error_message || '') + '</td>' +
+        '</tr>').join('') +
+        '</tbody></table>';
+    }
+
+    async function refreshConversations() {
+      const resp = await fetch('/api/kbs/' + kbID + '/conversations');
+      if (!resp.ok) {
+        conversationsTable.textContent = 'Failed to load conversations.';
+        return;
+      }
+      const items = await resp.json();
+      if (!items.length) {
+        conversationsTable.innerHTML = '<p class="muted">No conversations yet.</p>';
+        return;
+      }
+      conversationsTable.innerHTML = '<table><thead><tr><th>Title</th><th>Updated</th><th>Actions</th></tr></thead><tbody>' +
+        items.map(item => '<tr>' +
+          '<td><a href="/kbs/' + kbID + '/conversations/' + esc(item.id) + '">' + esc(item.title) + '</a></td>' +
+          '<td>' + esc(item.last_message_at || item.updated_at || item.created_at) + '</td>' +
+          '<td><div class="actions">' +
+            '<button class="secondary" type="button" data-conversation-action="open" data-conversation-id="' + esc(item.id) + '">Open</button>' +
+            '<button class="secondary" type="button" data-conversation-action="archive" data-conversation-id="' + esc(item.id) + '">Archive</button>' +
+          '</div></td>' +
         '</tr>').join('') +
         '</tbody></table>';
     }
@@ -381,7 +417,7 @@ const kbDetailHTML = `<!doctype html>
           }
         }
       } finally {
-        await Promise.all([refreshDocuments(), refreshJobs()]);
+        await Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
         button.disabled = false;
       }
     });
@@ -400,13 +436,56 @@ const kbDetailHTML = `<!doctype html>
         if (payload?.id) {
           watchJob(payload.id);
         }
-        await Promise.all([refreshDocuments(), refreshJobs()]);
+        await Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
       } finally {
         reindexAllButton.disabled = false;
       }
     });
 
-    Promise.all([refreshDocuments(), refreshJobs()]);
+    conversationForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      conversationMessage.textContent = 'Creating conversation…';
+      const resp = await fetch('/api/kbs/' + kbID + '/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: conversationTitle.value })
+      });
+      const payload = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        conversationMessage.textContent = payload?.message || 'Failed to create conversation.';
+        return;
+      }
+      conversationMessage.textContent = 'Conversation created.';
+      conversationForm.reset();
+      await refreshConversations();
+      window.location.href = '/kbs/' + kbID + '/conversations/' + payload.id;
+    });
+
+    conversationsTable.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-conversation-action]');
+      if (!button) {
+        return;
+      }
+      const action = button.dataset.conversationAction;
+      const conversationID = button.dataset.conversationId;
+      if (action === 'open') {
+        window.location.href = '/kbs/' + kbID + '/conversations/' + conversationID;
+        return;
+      }
+      if (action === 'archive' && !window.confirm('Archive this conversation?')) {
+        return;
+      }
+      const resp = await fetch('/api/kbs/' + kbID + '/conversations/' + conversationID, { method: 'DELETE' });
+      if (!resp.ok) {
+        const payload = await resp.json().catch(() => null);
+        conversationMessage.textContent = payload?.message || 'Failed to archive conversation.';
+        return;
+      }
+      conversationMessage.textContent = 'Conversation archived.';
+      await refreshConversations();
+    });
+
+    Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
   </script>
 </body>
 </html>`
