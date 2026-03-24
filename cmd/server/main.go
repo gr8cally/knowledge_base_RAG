@@ -42,7 +42,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := httpserver.NewRouter(logger, cfg.SQLitePath, deps.CheckChroma)
+	kbService := deps.NewKnowledgeBaseService()
+	router := httpserver.NewRouter(logger, cfg.SQLitePath, deps.CheckChroma, kbService)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

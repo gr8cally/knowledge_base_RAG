@@ -107,7 +107,14 @@ func execSQL(ctx context.Context, dbPath, script string) error {
 }
 
 func execSQLWithOutput(ctx context.Context, dbPath, script string) (string, error) {
-	cmd := exec.CommandContext(ctx, "sqlite3", dbPath)
+	return execSQLiteWithArgs(ctx, dbPath, nil, script)
+}
+
+func execSQLiteWithArgs(ctx context.Context, dbPath string, args []string, script string) (string, error) {
+	cmdArgs := append([]string{}, args...)
+	cmdArgs = append(cmdArgs, dbPath)
+
+	cmd := exec.CommandContext(ctx, "sqlite3", cmdArgs...)
 	cmd.Stdin = strings.NewReader(script)
 
 	var stdout bytes.Buffer
