@@ -104,7 +104,3 @@ func (r *KnowledgeBaseRepo) queryMany(ctx context.Context, query string) ([]doma
 	}
 	return items, nil
 }
-
-func execSQLiteJSON(ctx context.Context, dbPath, query string) (string, error) {
-	return execSQLiteWithArgs(ctx, dbPath, []string{"-json"}, query)
-}
