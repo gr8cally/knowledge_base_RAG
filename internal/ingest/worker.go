@@ -12,6 +12,8 @@ import (
 
 type VectorIndexer interface {
 	AddDocumentChunks(ctx context.Context, kbNamespace string, docs []schema.Document) error
+	DeleteDocument(ctx context.Context, kbNamespace, documentID string) error
+	DeleteNamespace(ctx context.Context, kbNamespace string) error
 }
 
 type Worker struct {

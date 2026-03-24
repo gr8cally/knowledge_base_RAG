@@ -180,6 +180,8 @@ const kbDetailHTML = `<!doctype html>
     .muted { color: #6f6256; }
     a { color: #8d3d1f; text-decoration: none; }
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
+    button.secondary { background: #f0e5d3; color: #1f1a17; border: 1px solid #d9cbb5; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     input[type="file"] { width: 100%; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { text-align: left; padding: 0.65rem 0.4rem; border-bottom: 1px solid #eadfcd; vertical-align: top; }
@@ -212,6 +214,7 @@ const kbDetailHTML = `<!doctype html>
           <input id="upload-files" type="file" name="files" multiple />
           <div style="margin-top: 0.75rem;">
             <button type="submit">Upload and Index</button>
+            <button id="reindex-all" class="secondary" type="button">Re-index All</button>
           </div>
         </form>
         <div id="upload-message" class="message muted"></div>
@@ -237,6 +240,7 @@ const kbDetailHTML = `<!doctype html>
     const uploadMessage = document.getElementById('upload-message');
     const documentsTable = document.getElementById('documents-table');
     const jobsTable = document.getElementById('jobs-table');
+    const reindexAllButton = document.getElementById('reindex-all');
 
     function statusClass(value) {
       return 'status ' + String(value || '').toLowerCase();
@@ -257,13 +261,17 @@ const kbDetailHTML = `<!doctype html>
         documentsTable.innerHTML = '<p class="muted">No documents yet.</p>';
         return;
       }
-      documentsTable.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Parser</th><th>Chunks</th><th>Error</th></tr></thead><tbody>' +
+      documentsTable.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Parser</th><th>Chunks</th><th>Error</th><th>Actions</th></tr></thead><tbody>' +
         docs.map(doc => '<tr>' +
           '<td>' + esc(doc.display_name) + '</td>' +
           '<td><span class="' + statusClass(doc.status) + '">' + esc(doc.status) + '</span></td>' +
           '<td>' + esc(doc.parser_used || '-') + '</td>' +
           '<td>' + esc(doc.chunk_count) + '</td>' +
           '<td class="muted">' + esc(doc.error_message || '') + '</td>' +
+          '<td><div class="actions">' +
+            '<button class="secondary" type="button" data-action="refresh" data-document-id="' + esc(doc.id) + '">Refresh</button>' +
+            '<button class="secondary" type="button" data-action="delete" data-document-id="' + esc(doc.id) + '">Delete</button>' +
+          '</div></td>' +
         '</tr>').join('') +
         '</tbody></table>';
     }
@@ -335,6 +343,67 @@ const kbDetailHTML = `<!doctype html>
         }
       }
       uploadForm.reset();
+    });
+
+    documentsTable.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) {
+        return;
+      }
+      const documentID = button.dataset.documentId;
+      const action = button.dataset.action;
+      if (action === 'delete' && !window.confirm('Delete this document and its indexed chunks?')) {
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        if (action === 'refresh') {
+          uploadMessage.textContent = 'Refreshing document…';
+          const resp = await fetch('/api/kbs/' + kbID + '/documents/' + documentID + '/refresh', { method: 'POST' });
+          const payload = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            uploadMessage.textContent = payload?.message || 'Refresh failed.';
+          } else {
+            uploadMessage.textContent = 'Refresh accepted.';
+            if (payload?.job?.id) {
+              watchJob(payload.job.id);
+            }
+          }
+        } else if (action === 'delete') {
+          uploadMessage.textContent = 'Deleting document…';
+          const resp = await fetch('/api/kbs/' + kbID + '/documents/' + documentID, { method: 'DELETE' });
+          if (!resp.ok) {
+            const payload = await resp.json().catch(() => null);
+            uploadMessage.textContent = payload?.message || 'Delete failed.';
+          } else {
+            uploadMessage.textContent = 'Document deleted.';
+          }
+        }
+      } finally {
+        await Promise.all([refreshDocuments(), refreshJobs()]);
+        button.disabled = false;
+      }
+    });
+
+    reindexAllButton.addEventListener('click', async () => {
+      reindexAllButton.disabled = true;
+      uploadMessage.textContent = 'Starting re-index all…';
+      try {
+        const resp = await fetch('/api/kbs/' + kbID + '/reindex-all', { method: 'POST' });
+        const payload = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          uploadMessage.textContent = payload?.message || 'Re-index all failed.';
+          return;
+        }
+        uploadMessage.textContent = 'Re-index all accepted.';
+        if (payload?.id) {
+          watchJob(payload.id);
+        }
+        await Promise.all([refreshDocuments(), refreshJobs()]);
+      } finally {
+        reindexAllButton.disabled = false;
+      }
     });
 
     Promise.all([refreshDocuments(), refreshJobs()]);

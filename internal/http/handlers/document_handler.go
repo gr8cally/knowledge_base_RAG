@@ -13,6 +13,9 @@ import (
 type documentService interface {
 	ListDocuments(ctx context.Context, kbID string) ([]domain.Document, error)
 	UploadFile(ctx context.Context, kbID string, header *multipart.FileHeader) (ingest.UploadResult, error)
+	RefreshDocument(ctx context.Context, kbID, documentID string) (ingest.UploadResult, error)
+	DeleteDocument(ctx context.Context, kbID, documentID string) error
+	ReindexAll(ctx context.Context, kbID string) (*domain.IngestionJob, error)
 }
 
 type DocumentHandler struct {
@@ -80,4 +83,50 @@ func (h *DocumentHandler) UploadAPI(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusAccepted
 	}
 	writeJSON(w, status, results)
+}
+
+func (h *DocumentHandler) RefreshAPI(w http.ResponseWriter, r *http.Request) {
+	result, err := h.service.RefreshDocument(r.Context(), r.PathValue("kbID"), r.PathValue("documentID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, ingest.ErrKnowledgeBaseNotFound), errors.Is(err, ingest.ErrDocumentNotFound):
+			http.NotFound(w, r)
+		case errors.Is(err, ingest.ErrIngestionQueueFull):
+			writeAPIError(w, http.StatusServiceUnavailable, "ingestion_queue_full", err.Error())
+		default:
+			writeAPIError(w, http.StatusBadRequest, "refresh_failed", err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result)
+}
+
+func (h *DocumentHandler) DeleteAPI(w http.ResponseWriter, r *http.Request) {
+	err := h.service.DeleteDocument(r.Context(), r.PathValue("kbID"), r.PathValue("documentID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, ingest.ErrKnowledgeBaseNotFound), errors.Is(err, ingest.ErrDocumentNotFound):
+			http.NotFound(w, r)
+		default:
+			writeAPIError(w, http.StatusBadRequest, "delete_failed", err.Error())
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *DocumentHandler) ReindexAllAPI(w http.ResponseWriter, r *http.Request) {
+	job, err := h.service.ReindexAll(r.Context(), r.PathValue("kbID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, ingest.ErrKnowledgeBaseNotFound):
+			http.NotFound(w, r)
+		case errors.Is(err, ingest.ErrReindexInProgress):
+			writeAPIError(w, http.StatusConflict, "reindex_in_progress", err.Error())
+		default:
+			writeAPIError(w, http.StatusBadRequest, "reindex_failed", err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusAccepted, job)
 }
