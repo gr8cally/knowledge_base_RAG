@@ -91,6 +91,12 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 	if err != nil {
 		return UploadResult{}, err
 	}
+	tempMoved := false
+	defer func() {
+		if !tempMoved {
+			_ = s.fileStore.Remove(tempPath)
+		}
+	}()
 
 	normalizedName := normalizeName(header.Filename)
 	existing, err := s.docRepo.FindByKBAndNormalizedName(ctx, kbID, normalizedName)
@@ -98,7 +104,6 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		return UploadResult{}, err
 	}
 	if existing != nil && existing.SHA256 == sha {
-		_ = s.fileStore.Remove(tempPath)
 		now := time.Now().UTC()
 		job := domain.IngestionJob{
 			ID:             uuid.NewString(),
@@ -167,13 +172,13 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		CreatedAt:      now,
 	}
 	if err := s.jobRepo.Create(ctx, job); err != nil {
-		_ = s.fileStore.Remove(tempPath)
 		return UploadResult{}, err
 	}
 
 	if err := s.fileStore.Move(tempPath, doc.StoragePath); err != nil {
 		return UploadResult{}, err
 	}
+	tempMoved = true
 
 	if existing == nil {
 		if err := s.docRepo.Create(ctx, doc); err != nil {
