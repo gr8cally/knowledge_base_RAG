@@ -4,10 +4,13 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"knowledge_base_RAG/internal/config"
 	"knowledge_base_RAG/internal/embeddings"
+	"knowledge_base_RAG/internal/ingest"
+	"knowledge_base_RAG/internal/storage/filestore"
 	"knowledge_base_RAG/internal/storage/sqlite"
 	"knowledge_base_RAG/internal/vector"
 
@@ -54,4 +57,17 @@ func (d *Dependencies) CheckChroma(ctx context.Context) error {
 
 func (d *Dependencies) NewKnowledgeBaseService() *KnowledgeBaseService {
 	return NewKnowledgeBaseService(sqlite.NewKnowledgeBaseRepo(d.Config.SQLitePath))
+}
+
+func (d *Dependencies) NewDocumentService(kbService *KnowledgeBaseService) *ingest.Service {
+	fileStore := filestore.New(filepath.Join(d.Config.DataDir, "files"))
+	worker := ingest.NewWorker(d.Logger, d.Config.ChunkSize, d.Config.ChunkOverlap, d.Config.OCREnabled, d.Config.OCRLang)
+	return ingest.NewService(
+		d.Logger,
+		kbService,
+		sqlite.NewDocumentRepo(d.Config.SQLitePath),
+		sqlite.NewIngestRepo(d.Config.SQLitePath),
+		fileStore,
+		worker,
+	)
 }

@@ -110,6 +110,10 @@ func execSQLWithOutput(ctx context.Context, dbPath, script string) (string, erro
 	return execSQLiteWithArgs(ctx, dbPath, nil, script)
 }
 
+func execSQLiteJSON(ctx context.Context, dbPath, query string) (string, error) {
+	return execSQLiteWithArgs(ctx, dbPath, []string{"-json"}, query)
+}
+
 func execSQLiteWithArgs(ctx context.Context, dbPath string, args []string, script string) (string, error) {
 	cmdArgs := append([]string{}, args...)
 	cmdArgs = append(cmdArgs, dbPath)
