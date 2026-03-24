@@ -44,7 +44,12 @@ func main() {
 
 	kbService := deps.NewKnowledgeBaseService()
 	documentService := deps.NewDocumentService(kbService)
-	router := httpserver.NewRouter(logger, cfg.SQLitePath, deps.CheckChroma, kbService, documentService, cfg.MaxUploadMB)
+	router := httpserver.NewRouter(logger,
+		cfg.SQLitePath,
+		deps.CheckChroma,
+		kbService,
+		documentService,
+		cfg.MaxUploadMB)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
