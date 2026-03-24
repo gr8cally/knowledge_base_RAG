@@ -32,7 +32,7 @@ func NewDependencies(cfg config.Config, logger *slog.Logger) *Dependencies {
 		InferenceHTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-	HealthHTTPClient: &http.Client{
+		HealthHTTPClient: &http.Client{
 			Timeout: 2 * time.Second,
 		},
 	}
@@ -56,7 +56,7 @@ func (d *Dependencies) CheckChroma(ctx context.Context) error {
 }
 
 func (d *Dependencies) NewVectorStore(embedder langchainembeddings.Embedder) (*vector.Store, error) {
-	return vector.NewStore(d.Config.ChromaURL, d.Config.ChromaCollection, embedder)
+	return vector.NewStore(d.Config.ChromaURL, d.Config.ChromaCollection, embedder, d.InferenceHTTPClient)
 }
 
 func (d *Dependencies) NewKnowledgeBaseService() *KnowledgeBaseService {

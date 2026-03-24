@@ -252,7 +252,7 @@ Defaults:
 1. Server bind: `:8080`
 2. SQLite path: `./data/sqlite/app.db`
 3. Chroma URL: `http://localhost:8000`
-4. Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+4. Embedding model: `BAAI/bge-small-en-v1.5`
 
 ### 4.2 File Storage
 
@@ -304,7 +304,7 @@ Chunking defaults:
 Embedding:
 1. `embeddings/provider.go` exposes a single factory function returning a `embeddings.Embedder`.
 2. Internally uses `embeddings/huggingface.NewHuggingface(WithModel(...), WithClient(...))` from langchaingo — no custom embedding code.
-3. Default model: `sentence-transformers/all-MiniLM-L6-v2` via `EMBEDDING_ENDPOINT`.
+3. Default model: `BAAI/bge-small-en-v1.5` via `EMBEDDING_ENDPOINT`.
 4. Batch embeddings; retry transient failures with simple linear backoff (3 attempts).
 5. Chunking uses a LangChainGo text splitter; do not maintain a separate custom chunker implementation.
 
@@ -558,8 +558,8 @@ MODEL_NAME=nvidia/nemotron-3-nano-30b-a3b:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Embeddings
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_ENDPOINT=http://localhost:8081
+EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
+EMBEDDING_ENDPOINT=https://router.huggingface.co/hf-inference
 
 # Vector DB
 CHROMA_URL=http://localhost:8000

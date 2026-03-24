@@ -30,6 +30,7 @@ func NewProvider(cfg config.Config, httpClient *http.Client) (langchainembedding
 
 	return hfembeddings.NewHuggingface(
 		hfembeddings.WithModel(cfg.EmbeddingModelName),
+		hfembeddings.WithTask("feature-extraction"),
 		hfembeddings.WithClient(*client),
 	)
 }
