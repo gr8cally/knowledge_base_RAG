@@ -19,6 +19,7 @@ import (
 var (
 	ErrKnowledgeBaseNotFound = errors.New("knowledge base not found")
 	ErrIngestionJobNotFound  = errors.New("ingestion job not found")
+	ErrIngestionQueueFull    = errors.New("ingestion queue full")
 )
 
 type KnowledgeBaseGetter interface {
@@ -129,12 +130,13 @@ func (s *Service) GetJob(ctx context.Context, kbID, jobID string) (*domain.Inges
 }
 
 func (s *Service) SubscribeJob(ctx context.Context, kbID, jobID string) (*domain.IngestionJob, <-chan JobEvent, func(), error) {
+	events, cancel := s.broker.Subscribe(jobID)
 	job, err := s.GetJob(ctx, kbID, jobID)
 	if err != nil {
+		cancel()
 		return nil, nil, nil, err
 	}
 
-	events, cancel := s.broker.Subscribe(jobID)
 	return job, events, cancel, nil
 }
 
@@ -261,7 +263,25 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 	}
 
 	task := JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace}
-	s.queue <- task
+	select {
+	case s.queue <- task:
+	case <-ctx.Done():
+		finished := time.Now().UTC()
+		job.Status = "failed"
+		job.FailedItems = 1
+		job.ErrorMessage = "upload context cancelled before queueing"
+		job.FinishedAt = &finished
+		_ = s.jobRepo.Update(context.Background(), job)
+		return UploadResult{}, fmt.Errorf("%w: upload context cancelled", ErrIngestionQueueFull)
+	default:
+		finished := time.Now().UTC()
+		job.Status = "failed"
+		job.FailedItems = 1
+		job.ErrorMessage = "ingestion queue full"
+		job.FinishedAt = &finished
+		_ = s.jobRepo.Update(context.Background(), job)
+		return UploadResult{}, fmt.Errorf("%w: try again later", ErrIngestionQueueFull)
+	}
 	s.publish(job, doc, "queued", "upload accepted")
 	if existing != nil {
 		s.logger.Warn("document_replace_vector_cleanup_deferred",

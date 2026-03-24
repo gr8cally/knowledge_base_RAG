@@ -62,6 +62,10 @@ func (h *DocumentHandler) UploadAPI(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
+			if errors.Is(err, ingest.ErrIngestionQueueFull) {
+				writeAPIError(w, http.StatusServiceUnavailable, "ingestion_queue_full", err.Error())
+				return
+			}
 			writeAPIError(w, http.StatusBadRequest, "upload_failed", err.Error())
 			return
 		}

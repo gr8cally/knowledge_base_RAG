@@ -46,7 +46,7 @@ func Load() (Config, error) {
 		OpenRouterBaseURL:   getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
 		HuggingFaceToken:    firstNonEmpty(getEnv("HF_TOKEN", ""), getEnv("HUGGINGFACEHUB_API_TOKEN", "")),
 		EmbeddingModelName:  getEnv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
-		EmbeddingEndpoint:   getEnv("EMBEDDING_ENDPOINT", "http://localhost:8081"),
+		EmbeddingEndpoint:   getEnv("EMBEDDING_ENDPOINT", "https://router.huggingface.co/hf-inference/models/"),
 		ChromaURL:           getEnv("CHROMA_URL", "http://localhost:8000"),
 		ChromaCollection:    getEnv("CHROMA_COLLECTION", "knowledge_base_rag"),
 		RAGTopK:             getEnvInt("RAG_TOP_K", 6),
