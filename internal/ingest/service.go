@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"knowledge_base_RAG/internal/domain"
@@ -58,6 +59,10 @@ type Service struct {
 	queue         chan JobTask
 	workerCount   int
 	startedWorker bool
+	accepting     bool
+	mu            sync.RWMutex
+	wg            sync.WaitGroup
+	stopOnce      sync.Once
 }
 
 func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo DocumentRepository, jobRepo IngestionJobRepository, fileStore *filestore.Store, worker *Worker, broker *JobBroker, workerCount int) *Service {
@@ -74,18 +79,41 @@ func NewService(logger *slog.Logger, kbGetter KnowledgeBaseGetter, docRepo Docum
 		broker:      broker,
 		queue:       make(chan JobTask, max(workerCount*4, 8)),
 		workerCount: workerCount,
+		accepting:   true,
 	}
 }
 
 func (s *Service) Start(ctx context.Context) {
+	s.mu.Lock()
 	if s.startedWorker {
+		s.mu.Unlock()
 		return
 	}
 	s.startedWorker = true
+	s.mu.Unlock()
 
 	for i := 0; i < s.workerCount; i++ {
+		s.wg.Add(1)
 		go s.runWorker(ctx, i+1)
 	}
+
+	go func() {
+		<-ctx.Done()
+		s.stopAccepting()
+	}()
+}
+
+func (s *Service) Wait() {
+	s.wg.Wait()
+}
+
+func (s *Service) stopAccepting() {
+	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		s.accepting = false
+		close(s.queue)
+		s.mu.Unlock()
+	})
 }
 
 func (s *Service) ListDocuments(ctx context.Context, kbID string) ([]domain.Document, error) {
@@ -263,9 +291,22 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 	}
 
 	task := JobTask{Job: job, Document: doc, KBNamespace: kb.Namespace}
+	s.mu.RLock()
+	if !s.accepting {
+		s.mu.RUnlock()
+		finished := time.Now().UTC()
+		job.Status = "failed"
+		job.FailedItems = 1
+		job.ErrorMessage = "ingestion service is shutting down"
+		job.FinishedAt = &finished
+		_ = s.jobRepo.Update(context.Background(), job)
+		return UploadResult{}, fmt.Errorf("%w: service shutting down", ErrIngestionQueueFull)
+	}
 	select {
 	case s.queue <- task:
+		s.mu.RUnlock()
 	case <-ctx.Done():
+		s.mu.RUnlock()
 		finished := time.Now().UTC()
 		job.Status = "failed"
 		job.FailedItems = 1
@@ -274,6 +315,7 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 		_ = s.jobRepo.Update(context.Background(), job)
 		return UploadResult{}, fmt.Errorf("%w: upload context cancelled", ErrIngestionQueueFull)
 	default:
+		s.mu.RUnlock()
 		finished := time.Now().UTC()
 		job.Status = "failed"
 		job.FailedItems = 1
@@ -295,13 +337,19 @@ func (s *Service) UploadFile(ctx context.Context, kbID string, header *multipart
 }
 
 func (s *Service) runWorker(ctx context.Context, workerID int) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case task := <-s.queue:
-			s.processTask(ctx, workerID, task)
-		}
+	defer s.wg.Done()
+
+	taskCtx := context.WithoutCancel(ctx)
+	for task := range s.queue {
+		s.processTask(taskCtx, workerID, task)
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		// Queue is only closed during shutdown.
+		return
 	}
 }
 

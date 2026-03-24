@@ -49,7 +49,8 @@ func main() {
 		logger.Error("failed to initialize document service", "error", err)
 		os.Exit(1)
 	}
-	documentService.Start(context.Background())
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	documentService.Start(workerCtx)
 	router := httpserver.NewRouter(logger,
 		cfg.SQLitePath,
 		deps.CheckChroma,
@@ -84,6 +85,9 @@ func main() {
 		logger.Error("shutdown failed", "error", err)
 		os.Exit(1)
 	}
+
+	workerCancel()
+	documentService.Wait()
 
 	logger.Info("server stopped")
 }
