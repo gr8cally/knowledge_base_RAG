@@ -11,10 +11,14 @@ import (
 
 type HealthHandler struct {
 	sqlitePath string
+	chromaPing func(context.Context) error
 }
 
-func NewHealthHandler(sqlitePath string) *HealthHandler {
-	return &HealthHandler{sqlitePath: sqlitePath}
+func NewHealthHandler(sqlitePath string, chromaPing func(context.Context) error) *HealthHandler {
+	return &HealthHandler{
+		sqlitePath: sqlitePath,
+		chromaPing: chromaPing,
+	}
 }
 
 func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
@@ -22,10 +26,21 @@ func (h *HealthHandler) Health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *HealthHandler) Ready(w http.ResponseWriter, _ *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	sqliteCtx, sqliteCancel := context.WithTimeout(context.Background(), time.Second)
+	defer sqliteCancel()
 
-	if err := sqlitestore.Ping(ctx, h.sqlitePath); err != nil {
+	if err := sqlitestore.Ping(sqliteCtx, h.sqlitePath); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"status": "not_ready",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	chromaCtx, chromaCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer chromaCancel()
+
+	if err := h.chromaPing(chromaCtx); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"status": "not_ready",
 			"error":  err.Error(),

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -8,8 +9,8 @@ import (
 	"knowledge_base_RAG/internal/http/middleware"
 )
 
-func NewRouter(logger *slog.Logger, sqlitePath string) http.Handler {
-	healthHandler := handlers.NewHealthHandler(sqlitePath)
+func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.Context) error) http.Handler {
+	healthHandler := handlers.NewHealthHandler(sqlitePath, chromaPing)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
