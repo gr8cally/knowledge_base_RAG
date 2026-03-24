@@ -15,17 +15,21 @@ import (
 )
 
 type Dependencies struct {
-	Config     config.Config
-	Logger     *slog.Logger
-	HTTPClient *http.Client
+	Config              config.Config
+	Logger              *slog.Logger
+	InferenceHTTPClient *http.Client
+	HealthHTTPClient    *http.Client
 }
 
 func NewDependencies(cfg config.Config, logger *slog.Logger) *Dependencies {
 	return &Dependencies{
 		Config: cfg,
 		Logger: logger,
-		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+		InferenceHTTPClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+		HealthHTTPClient: &http.Client{
+			Timeout: 2 * time.Second,
 		},
 	}
 }
@@ -35,14 +39,14 @@ func (d *Dependencies) NewLLM() (*openai.LLM, error) {
 		openai.WithBaseURL(d.Config.OpenRouterBaseURL),
 		openai.WithToken(d.Config.OpenRouterAPIKey),
 		openai.WithModel(d.Config.ModelName),
-		openai.WithHTTPClient(d.HTTPClient),
+		openai.WithHTTPClient(d.InferenceHTTPClient),
 	)
 }
 
 func (d *Dependencies) NewEmbedder() (langchainembeddings.Embedder, error) {
-	return embeddings.NewProvider(d.Config, d.HTTPClient)
+	return embeddings.NewProvider(d.Config, d.InferenceHTTPClient)
 }
 
 func (d *Dependencies) CheckChroma(ctx context.Context) error {
-	return vector.CheckHealth(ctx, d.Config.ChromaURL, d.HTTPClient)
+	return vector.CheckHealth(ctx, d.Config.ChromaURL, d.HealthHTTPClient)
 }

@@ -51,6 +51,15 @@ func getEnvBool(key string, fallback bool) bool {
 	return parsed
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func loadDotEnv(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

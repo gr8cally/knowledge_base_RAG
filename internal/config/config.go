@@ -13,6 +13,7 @@ type Config struct {
 	OpenRouterAPIKey    string
 	ModelName           string
 	OpenRouterBaseURL   string
+	HuggingFaceToken    string
 	EmbeddingModelName  string
 	EmbeddingEndpoint   string
 	ChromaURL           string
@@ -42,6 +43,7 @@ func Load() (Config, error) {
 		OpenRouterAPIKey:    getEnv("OPENROUTER_API_KEY", ""),
 		ModelName:           getEnv("MODEL_NAME", ""),
 		OpenRouterBaseURL:   getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+		HuggingFaceToken:    firstNonEmpty(getEnv("HF_TOKEN", ""), getEnv("HUGGINGFACEHUB_API_TOKEN", "")),
 		EmbeddingModelName:  getEnv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
 		EmbeddingEndpoint:   getEnv("EMBEDDING_ENDPOINT", "http://localhost:8081"),
 		ChromaURL:           getEnv("CHROMA_URL", "http://localhost:8000"),

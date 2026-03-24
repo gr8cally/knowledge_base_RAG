@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // CheckHealth verifies that the configured Chroma endpoint responds to a heartbeat request.
@@ -14,17 +15,21 @@ func CheckHealth(ctx context.Context, chromaURL string, httpClient *http.Client)
 
 	var lastErr error
 	for _, path := range paths {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
+		pathCtx, cancel := context.WithTimeout(ctx, time.Second)
+		req, err := http.NewRequestWithContext(pathCtx, http.MethodGet, baseURL+path, nil)
 		if err != nil {
+			cancel()
 			return fmt.Errorf("build chroma request: %w", err)
 		}
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
+			cancel()
 			lastErr = err
 			continue
 		}
 		_ = resp.Body.Close()
+		cancel()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil

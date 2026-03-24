@@ -2,7 +2,6 @@ package embeddings
 
 import (
 	"net/http"
-	"os"
 
 	"knowledge_base_RAG/internal/config"
 
@@ -13,10 +12,7 @@ import (
 
 // NewProvider returns the configured embedding provider.
 func NewProvider(cfg config.Config, httpClient *http.Client) (langchainembeddings.Embedder, error) {
-	token := os.Getenv("HF_TOKEN")
-	if token == "" {
-		token = os.Getenv("HUGGINGFACEHUB_API_TOKEN")
-	}
+	token := cfg.HuggingFaceToken
 	if token == "" {
 		// Local inference servers typically ignore auth headers; langchaingo's client still requires a token value.
 		token = "local"
