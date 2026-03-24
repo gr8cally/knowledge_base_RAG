@@ -8,6 +8,7 @@ import (
 
 	"knowledge_base_RAG/internal/config"
 	"knowledge_base_RAG/internal/embeddings"
+	"knowledge_base_RAG/internal/storage/sqlite"
 	"knowledge_base_RAG/internal/vector"
 
 	langchainembeddings "github.com/tmc/langchaingo/embeddings"
@@ -49,4 +50,8 @@ func (d *Dependencies) NewEmbedder() (langchainembeddings.Embedder, error) {
 
 func (d *Dependencies) CheckChroma(ctx context.Context) error {
 	return vector.CheckHealth(ctx, d.Config.ChromaURL, d.HealthHTTPClient)
+}
+
+func (d *Dependencies) NewKnowledgeBaseService() *KnowledgeBaseService {
+	return NewKnowledgeBaseService(sqlite.NewKnowledgeBaseRepo(d.Config.SQLitePath))
 }
