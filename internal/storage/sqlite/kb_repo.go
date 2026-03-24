@@ -46,6 +46,7 @@ func (r *KnowledgeBaseRepo) GetByID(ctx context.Context, id string) (*domain.Kno
 SELECT id, name, description, namespace, created_at, updated_at, archived_at
 FROM knowledge_bases
 WHERE id = %s
+  AND archived_at IS NULL
 LIMIT 1;`, sqlQuote(id))
 
 	items, err := r.queryMany(ctx, query)

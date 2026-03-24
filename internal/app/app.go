@@ -37,11 +37,12 @@ func (s *KnowledgeBaseService) Get(ctx context.Context, id string) (*domain.Know
 
 func (s *KnowledgeBaseService) Create(ctx context.Context, name, description string) (domain.KnowledgeBase, error) {
 	now := time.Now().UTC()
+	id := uuid.NewString()
 	kb := domain.KnowledgeBase{
-		ID:          uuid.NewString(),
+		ID:          id,
 		Name:        name,
 		Description: description,
-		Namespace:   "kb_" + uuid.NewString(),
+		Namespace:   "kb_" + id,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
