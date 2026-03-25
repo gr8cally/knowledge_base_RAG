@@ -325,7 +325,7 @@ const kbDetailHTML = `<!doctype html>
       }
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) {
-        return esc(value);
+        return String(value);
       }
       return new Intl.DateTimeFormat(undefined, {
         month: 'short',
