@@ -154,15 +154,17 @@ const chatPageHTML = `<!doctype html>
   <title>{{ .Conversation.Title }}</title>
   <style>
     body { font-family: sans-serif; margin: 2rem; background: #f6f1e8; color: #1f1a17; }
-    .shell { max-width: 960px; margin: 0 auto; }
+    .shell { max-width: 880px; margin: 0 auto; }
     .card { background: #fffdf8; border: 1px solid #d9cbb5; border-radius: 14px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
     .muted { color: #6f6256; }
     a { color: #8d3d1f; text-decoration: none; }
     .timeline { display: grid; gap: 0.75rem; }
-    .msg { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.85rem 1rem; background: #fff; }
-    .msg.user { background: #f0e5d3; }
+    .msg { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.95rem 1.05rem; background: #fff; max-width: 76ch; line-height: 1.6; }
+    .msg.user { background: #f0e5d3; margin-left: auto; }
+    .msg.assistant { background: #fff; }
     .meta { font-size: 0.85rem; color: #6f6256; margin-bottom: 0.35rem; text-transform: uppercase; }
-    textarea { width: 100%; min-height: 100px; }
+    .stamp { font-size: 0.8rem; color: #8a7b6d; margin-top: 0.6rem; }
+    textarea { width: 100%; min-height: 110px; box-sizing: border-box; line-height: 1.5; }
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
     code { background: #f0e5d3; padding: 0.1rem 0.3rem; border-radius: 6px; }
   </style>
@@ -202,6 +204,22 @@ const chatPageHTML = `<!doctype html>
       return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     }
 
+    function formatDateTime(value) {
+      if (!value) {
+        return '';
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return String(value);
+      }
+      return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      }).format(date);
+    }
+
     async function loadMessages() {
       const resp = await fetch('/api/kbs/' + kbID + '/conversations/' + conversationID + '/messages');
       if (!resp.ok) {
@@ -210,13 +228,14 @@ const chatPageHTML = `<!doctype html>
       }
       const messages = await resp.json();
       if (!messages.length) {
-        timeline.innerHTML = '<p class="muted">No messages yet.</p>';
+        timeline.innerHTML = '<p class="muted">Ask the first question in this conversation.</p>';
         return;
       }
       timeline.innerHTML = messages.map(item => '<div class="msg ' + esc(item.message.role) + '">' +
         '<div class="meta">' + esc(item.message.role) + '</div>' +
         '<div>' + esc(item.message.content).replaceAll('\n', '<br />') + '</div>' +
         renderCitations(item.citations || []) +
+        '<div class="stamp">' + esc(formatDateTime(item.message.created_at)) + '</div>' +
       '</div>').join('');
     }
 
@@ -237,6 +256,7 @@ const chatPageHTML = `<!doctype html>
       timeline.insertAdjacentHTML('beforeend', '<div class="msg user">' +
         '<div class="meta">user</div>' +
         '<div>' + esc(message.content).replaceAll('\n', '<br />') + '</div>' +
+        '<div class="stamp">' + esc(formatDateTime(message.created_at)) + '</div>' +
       '</div>');
     }
 
@@ -249,6 +269,7 @@ const chatPageHTML = `<!doctype html>
         '<div class="meta">assistant</div>' +
         '<div class="assistant-content"></div>' +
         '<div class="assistant-citations muted" style="margin-top:0.75rem;"></div>' +
+        '<div class="stamp" id="assistant-live-stamp"></div>' +
       '</div>');
       return document.getElementById('assistant-live');
     }
@@ -262,6 +283,7 @@ const chatPageHTML = `<!doctype html>
         const source = new EventSource(streamURL);
         let terminal = false;
         let sawPayload = false;
+        const stampNode = live.querySelector('#assistant-live-stamp');
 
         source.addEventListener('assistant', (event) => {
           sawPayload = true;
@@ -269,6 +291,7 @@ const chatPageHTML = `<!doctype html>
           if (payload.type === 'snapshot') {
             contentNode.textContent = '';
             citationsNode.innerHTML = '';
+            stampNode.textContent = '';
             status.textContent = 'Generating answer…';
             return;
           }
@@ -280,6 +303,7 @@ const chatPageHTML = `<!doctype html>
             terminal = true;
             contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
             citationsNode.innerHTML = renderCitations(payload.citations || []);
+            stampNode.textContent = formatDateTime(payload.at);
             live.removeAttribute('id');
             status.textContent = 'Answer complete.';
             source.close();
