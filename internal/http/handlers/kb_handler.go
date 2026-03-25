@@ -129,6 +129,11 @@ const kbListHTML = `<!doctype html>
     .row { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
     .muted { color: #6f6256; }
     a { color: #8d3d1f; text-decoration: none; }
+    button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 0.7rem 0.8rem; border: 1px solid #d9cbb5; border-radius: 10px; background: #fff; }
+    textarea { min-height: 88px; resize: vertical; }
+    .stack { display: grid; gap: 0.75rem; }
+    .message { min-height: 1.5rem; }
     code { background: #f0e5d3; padding: 0.1rem 0.3rem; border-radius: 6px; }
   </style>
 </head>
@@ -138,10 +143,21 @@ const kbListHTML = `<!doctype html>
       <div class="row">
         <div>
           <h1>Knowledge Bases</h1>
-          <p class="muted">Phase 3 dashboard shell. Create KBs via <code>POST /api/kbs</code>.</p>
+          <p class="muted">Create and switch between isolated knowledge bases.</p>
         </div>
         <div class="muted">{{ .Now }}</div>
       </div>
+    </section>
+    <section class="card">
+      <h2>Create Knowledge Base</h2>
+      <form id="kb-create-form" class="stack">
+        <input id="kb-name" type="text" placeholder="Knowledge base name" />
+        <textarea id="kb-description" placeholder="Short description"></textarea>
+        <div>
+          <button type="submit">Create KB</button>
+        </div>
+      </form>
+      <p id="kb-create-message" class="message muted"></p>
     </section>
     {{ if .KnowledgeBases }}
       {{ range .KnowledgeBases }}
@@ -162,6 +178,31 @@ const kbListHTML = `<!doctype html>
       </section>
     {{ end }}
   </main>
+  <script>
+    const createForm = document.getElementById('kb-create-form');
+    const createName = document.getElementById('kb-name');
+    const createDescription = document.getElementById('kb-description');
+    const createMessage = document.getElementById('kb-create-message');
+
+    createForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      createMessage.textContent = 'Creating knowledge base…';
+      const resp = await fetch('/api/kbs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: createName.value,
+          description: createDescription.value
+        })
+      });
+      const payload = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        createMessage.textContent = payload?.message || 'Failed to create knowledge base.';
+        return;
+      }
+      window.location.href = '/kbs/' + payload.id;
+    });
+  </script>
 </body>
 </html>`
 
@@ -175,13 +216,12 @@ const kbDetailHTML = `<!doctype html>
     body { font-family: sans-serif; margin: 2rem; background: #f6f1e8; color: #1f1a17; }
     .shell { max-width: 960px; margin: 0 auto; }
     .card { background: #fffdf8; border: 1px solid #d9cbb5; border-radius: 14px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
-    .tabs { display: flex; gap: 0.75rem; margin-top: 1rem; }
-    .tab { padding: 0.5rem 0.75rem; border: 1px solid #d9cbb5; border-radius: 999px; background: #f0e5d3; }
     .muted { color: #6f6256; }
     a { color: #8d3d1f; text-decoration: none; }
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
     button.secondary { background: #f0e5d3; color: #1f1a17; border: 1px solid #d9cbb5; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.7rem 0.8rem; border: 1px solid #d9cbb5; border-radius: 10px; background: #fff; }
     input[type="file"] { width: 100%; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { text-align: left; padding: 0.65rem 0.4rem; border-bottom: 1px solid #eadfcd; vertical-align: top; }
@@ -201,28 +241,6 @@ const kbDetailHTML = `<!doctype html>
       <h1>{{ .Name }}</h1>
       <p class="muted">{{ .Description }}</p>
       <small class="muted">Namespace: {{ .Namespace }}</small>
-      <div class="tabs">
-        <div class="tab">Documents</div>
-        <div class="tab">Conversations</div>
-        <div class="tab">Settings</div>
-      </div>
-    </section>
-    <section class="card">
-      <h2>Documents</h2>
-      <div class="stack">
-        <form id="upload-form">
-          <input id="upload-files" type="file" name="files" multiple />
-          <div style="margin-top: 0.75rem;">
-            <button type="submit">Upload and Index</button>
-            <button id="reindex-all" class="secondary" type="button">Re-index All</button>
-          </div>
-        </form>
-        <div id="upload-message" class="message muted"></div>
-      </div>
-      <h3>Documents</h3>
-      <div id="documents-table" class="muted">Loading documents…</div>
-      <h3 style="margin-top: 1.5rem;">Ingestion Jobs</h3>
-      <div id="jobs-table" class="muted">Loading jobs…</div>
     </section>
     <section class="card">
       <h2>Conversations</h2>
@@ -238,8 +256,18 @@ const kbDetailHTML = `<!doctype html>
       <div id="conversations-table" class="muted">Loading conversations…</div>
     </section>
     <section class="card">
-      <h2>Settings</h2>
-      <p class="muted">Current namespace: {{ .Namespace }}</p>
+      <h2>Documents</h2>
+      <div class="stack">
+        <form id="upload-form">
+          <input id="upload-files" type="file" name="files" multiple />
+          <div style="margin-top: 0.75rem;">
+            <button type="submit">Upload and Index</button>
+            <button id="reindex-all" class="secondary" type="button">Re-index All</button>
+          </div>
+        </form>
+        <div id="upload-message" class="message muted"></div>
+      </div>
+      <div id="documents-table" class="muted">Loading documents…</div>
     </section>
   </main>
   <script>
@@ -248,7 +276,6 @@ const kbDetailHTML = `<!doctype html>
     const uploadFiles = document.getElementById('upload-files');
     const uploadMessage = document.getElementById('upload-message');
     const documentsTable = document.getElementById('documents-table');
-    const jobsTable = document.getElementById('jobs-table');
     const reindexAllButton = document.getElementById('reindex-all');
     const conversationForm = document.getElementById('conversation-form');
     const conversationTitle = document.getElementById('conversation-title');
@@ -289,29 +316,6 @@ const kbDetailHTML = `<!doctype html>
         '</tbody></table>';
     }
 
-    async function refreshJobs() {
-      const resp = await fetch('/api/kbs/' + kbID + '/ingestion-jobs');
-      if (!resp.ok) {
-        jobsTable.textContent = 'Failed to load ingestion jobs.';
-        return;
-      }
-      const jobs = await resp.json();
-      if (!jobs.length) {
-        jobsTable.innerHTML = '<p class="muted">No ingestion jobs yet.</p>';
-        return;
-      }
-      jobsTable.innerHTML = '<table><thead><tr><th>Job</th><th>Status</th><th>Processed</th><th>Skipped</th><th>Failed</th><th>Error</th></tr></thead><tbody>' +
-        jobs.map(job => '<tr>' +
-          '<td><code>' + esc(job.id) + '</code></td>' +
-          '<td><span class="' + statusClass(job.status) + '">' + esc(job.status) + '</span></td>' +
-          '<td>' + esc(job.processed_items) + '/' + esc(job.total_items) + '</td>' +
-          '<td>' + esc(job.skipped_items) + '</td>' +
-          '<td>' + esc(job.failed_items) + '</td>' +
-          '<td class="muted">' + esc(job.error_message || '') + '</td>' +
-        '</tr>').join('') +
-        '</tbody></table>';
-    }
-
     async function refreshConversations() {
       const resp = await fetch('/api/kbs/' + kbID + '/conversations');
       if (!resp.ok) {
@@ -340,7 +344,7 @@ const kbDetailHTML = `<!doctype html>
       stream.addEventListener('job', async (event) => {
         const payload = JSON.parse(event.data);
         uploadMessage.textContent = (payload.message || payload.type) + ' (' + payload.job.status + ')';
-        await Promise.all([refreshDocuments(), refreshJobs()]);
+        await refreshDocuments();
         if (payload.job.status === 'completed' || payload.job.status === 'failed') {
           stream.close();
         }
@@ -365,14 +369,14 @@ const kbDetailHTML = `<!doctype html>
       const payload = await resp.json().catch(() => null);
       if (!resp.ok) {
         uploadMessage.textContent = payload?.message || 'Upload failed.';
-        await Promise.all([refreshDocuments(), refreshJobs()]);
+        await refreshDocuments();
         return;
       }
 
       const jobs = (payload || []).map(item => item.job).filter(Boolean);
       const skipped = (payload || []).filter(item => item.skipped);
       uploadMessage.textContent = skipped.length && !jobs.length ? skipped[0].notice : 'Upload accepted.';
-      await Promise.all([refreshDocuments(), refreshJobs()]);
+      await refreshDocuments();
       for (const job of jobs) {
         if (job.status === 'queued' || job.status === 'running') {
           watchJob(job.id);
@@ -417,7 +421,7 @@ const kbDetailHTML = `<!doctype html>
           }
         }
       } finally {
-        await Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
+        await Promise.all([refreshDocuments(), refreshConversations()]);
         button.disabled = false;
       }
     });
@@ -436,7 +440,7 @@ const kbDetailHTML = `<!doctype html>
         if (payload?.id) {
           watchJob(payload.id);
         }
-        await Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
+        await Promise.all([refreshDocuments(), refreshConversations()]);
       } finally {
         reindexAllButton.disabled = false;
       }
@@ -485,7 +489,7 @@ const kbDetailHTML = `<!doctype html>
       await refreshConversations();
     });
 
-    Promise.all([refreshDocuments(), refreshJobs(), refreshConversations()]);
+    Promise.all([refreshDocuments(), refreshConversations()]);
   </script>
 </body>
 </html>`
