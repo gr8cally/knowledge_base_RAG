@@ -11,13 +11,13 @@ import (
 	"knowledge_base_RAG/internal/ingest"
 )
 
-func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.Context) error, kbService *app.KnowledgeBaseService, documentService *ingest.Service, conversationService *app.ConversationService, maxUploadMB int) http.Handler {
+func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.Context) error, kbService *app.KnowledgeBaseService, documentService *ingest.Service, conversationService *app.ConversationService, chatService *app.ChatService, maxUploadMB int) http.Handler {
 	healthHandler := handlers.NewHealthHandler(sqlitePath, chromaPing)
 	kbHandler := handlers.NewKBHandler(kbService)
 	documentHandler := handlers.NewDocumentHandler(documentService, maxUploadMB)
 	ingestHandler := handlers.NewIngestHandler(documentService)
 	conversationHandler := handlers.NewConversationHandler(conversationService)
-	chatHandler := handlers.NewChatHandler(conversationService, kbService)
+	chatHandler := handlers.NewChatHandler(chatService, kbService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
@@ -40,6 +40,7 @@ func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.C
 	mux.HandleFunc("DELETE /api/kbs/{kbID}/conversations/{conversationID}", conversationHandler.ArchiveAPI)
 	mux.HandleFunc("GET /api/kbs/{kbID}/conversations/{conversationID}/messages", chatHandler.MessagesAPI)
 	mux.HandleFunc("POST /api/kbs/{kbID}/conversations/{conversationID}/messages", chatHandler.PostMessageAPI)
+	mux.HandleFunc("GET /api/kbs/{kbID}/conversations/{conversationID}/stream", chatHandler.StreamAPI)
 	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs", ingestHandler.ListAPI)
 	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs/{jobID}", ingestHandler.GetAPI)
 	mux.HandleFunc("GET /api/kbs/{kbID}/ingestion-jobs/{jobID}/events", ingestHandler.Events)

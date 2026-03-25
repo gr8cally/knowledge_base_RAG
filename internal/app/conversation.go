@@ -29,6 +29,7 @@ type ConversationRepository interface {
 type MessageRepository interface {
 	Create(ctx context.Context, msg domain.Message) error
 	ListByConversation(ctx context.Context, conversationID string) ([]domain.Message, error)
+	GetByID(ctx context.Context, conversationID, messageID string) (*domain.Message, error)
 }
 
 type ConversationService struct {

@@ -25,11 +25,6 @@ func main() {
 	logger := observability.NewLogger(cfg.AppEnv)
 	deps := app.NewDependencies(cfg, logger)
 
-	if _, err := deps.NewLLM(); err != nil {
-		logger.Error("failed to initialize llm client", "error", err)
-		os.Exit(1)
-	}
-
 	embedder, err := deps.NewEmbedder()
 	if err != nil {
 		logger.Error("failed to initialize embedder", "error", err)
@@ -45,9 +40,19 @@ func main() {
 
 	kbService := deps.NewKnowledgeBaseService()
 	conversationService := deps.NewConversationService(kbService)
+	llm, err := deps.NewLLM()
+	if err != nil {
+		logger.Error("failed to initialize llm client", "error", err)
+		os.Exit(1)
+	}
 	documentService, err := deps.NewDocumentService(kbService, embedder)
 	if err != nil {
 		logger.Error("failed to initialize document service", "error", err)
+		os.Exit(1)
+	}
+	chatService, err := deps.NewChatService(kbService, llm, embedder)
+	if err != nil {
+		logger.Error("failed to initialize chat service", "error", err)
 		os.Exit(1)
 	}
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -58,6 +63,7 @@ func main() {
 		kbService,
 		documentService,
 		conversationService,
+		chatService,
 		cfg.MaxUploadMB)
 
 	srv := &http.Server{

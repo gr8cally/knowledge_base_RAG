@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"time"
@@ -13,9 +14,10 @@ import (
 )
 
 type chatService interface {
-	Get(ctx context.Context, kbID, conversationID string) (*domain.Conversation, error)
-	ListMessages(ctx context.Context, kbID, conversationID string) ([]domain.Message, error)
+	GetConversation(ctx context.Context, kbID, conversationID string) (*domain.Conversation, error)
+	ListMessages(ctx context.Context, kbID, conversationID string) ([]app.ChatMessageView, error)
 	AddUserMessage(ctx context.Context, kbID, conversationID, content string) (domain.Message, error)
+	StreamAssistant(ctx context.Context, kbID, conversationID, userMessageID string, stream func(app.ChatStreamEvent) error) error
 }
 
 type kbLookup interface {
@@ -44,7 +46,7 @@ func (h *ChatHandler) Page(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	conv, err := h.service.Get(r.Context(), kbID, conversationID)
+	conv, err := h.service.GetConversation(r.Context(), kbID, conversationID)
 	if err != nil {
 		if errors.Is(err, app.ErrConversationNotFound) || errors.Is(err, app.ErrKnowledgeBaseNotFound) {
 			http.NotFound(w, r)
@@ -103,10 +105,45 @@ func (h *ChatHandler) PostMessageAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"message": msg,
-		"status":  "accepted",
-		"notice":  "assistant response is not available until Phase 7",
+		"message":    msg,
+		"status":     "accepted",
+		"stream_url": fmt.Sprintf("/api/kbs/%s/conversations/%s/stream?message_id=%s", r.PathValue("kbID"), r.PathValue("conversationID"), msg.ID),
 	})
+}
+
+func (h *ChatHandler) StreamAPI(w http.ResponseWriter, r *http.Request) {
+	userMessageID := r.URL.Query().Get("message_id")
+	if userMessageID == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing_message_id", "message_id is required")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeAPIError(w, http.StatusInternalServerError, "sse_not_supported", "response writer does not support streaming")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	_ = h.service.StreamAssistant(r.Context(), r.PathValue("kbID"), r.PathValue("conversationID"), userMessageID, func(event app.ChatStreamEvent) error {
+		if err := writeChatSSE(w, event); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	})
+}
+
+func writeChatSSE(w http.ResponseWriter, event app.ChatStreamEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "event: assistant\ndata: %s\n\n", payload)
+	return err
 }
 
 const chatPageHTML = `<!doctype html>
@@ -150,7 +187,7 @@ const chatPageHTML = `<!doctype html>
         </div>
       </form>
       <p id="message-status" class="muted" style="min-height:1.5rem;"></p>
-      <p class="muted">Phase 6 persists the user turn only. Assistant generation arrives in Phase 7.</p>
+      <p class="muted">Answers stream from the server and are persisted with citations.</p>
     </section>
   </main>
   <script>
@@ -176,10 +213,83 @@ const chatPageHTML = `<!doctype html>
         timeline.innerHTML = '<p class="muted">No messages yet.</p>';
         return;
       }
-      timeline.innerHTML = messages.map(msg => '<div class="msg ' + esc(msg.role) + '">' +
-        '<div class="meta">' + esc(msg.role) + '</div>' +
-        '<div>' + esc(msg.content) + '</div>' +
+      timeline.innerHTML = messages.map(item => '<div class="msg ' + esc(item.message.role) + '">' +
+        '<div class="meta">' + esc(item.message.role) + '</div>' +
+        '<div>' + esc(item.message.content).replaceAll('\n', '<br />') + '</div>' +
+        renderCitations(item.citations || []) +
       '</div>').join('');
+    }
+
+    function renderCitations(citations) {
+      if (!citations.length) {
+        return '';
+      }
+      return '<div class="muted" style="margin-top:0.75rem;"><strong>Sources</strong><br />' +
+        citations.map(c => '[' + esc(c.citation_index) + '] ' + esc(c.source_label) + ' · ' + esc(c.excerpt)).join('<br />') +
+      '</div>';
+    }
+
+    function appendUserMessage(message) {
+      const empty = timeline.querySelector('p.muted');
+      if (empty) {
+        timeline.innerHTML = '';
+      }
+      timeline.insertAdjacentHTML('beforeend', '<div class="msg user">' +
+        '<div class="meta">user</div>' +
+        '<div>' + esc(message.content).replaceAll('\n', '<br />') + '</div>' +
+      '</div>');
+    }
+
+    function ensureAssistantMessage() {
+      let node = document.getElementById('assistant-live');
+      if (node) {
+        return node;
+      }
+      timeline.insertAdjacentHTML('beforeend', '<div id="assistant-live" class="msg assistant">' +
+        '<div class="meta">assistant</div>' +
+        '<div class="assistant-content"></div>' +
+        '<div class="assistant-citations muted" style="margin-top:0.75rem;"></div>' +
+      '</div>');
+      return document.getElementById('assistant-live');
+    }
+
+    async function streamAssistant(streamURL) {
+      const live = ensureAssistantMessage();
+      const contentNode = live.querySelector('.assistant-content');
+      const citationsNode = live.querySelector('.assistant-citations');
+      const source = new EventSource(streamURL);
+
+      source.addEventListener('assistant', (event) => {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'snapshot') {
+          contentNode.textContent = '';
+          citationsNode.innerHTML = '';
+          status.textContent = 'Generating answer…';
+          return;
+        }
+        if (payload.type === 'token') {
+          contentNode.textContent += payload.content || '';
+          return;
+        }
+        if (payload.type === 'completed') {
+          contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
+          citationsNode.innerHTML = renderCitations(payload.citations || []);
+          live.removeAttribute('id');
+          status.textContent = 'Answer complete.';
+          source.close();
+          return;
+        }
+        if (payload.type === 'error') {
+          status.textContent = payload.error || 'Assistant response failed.';
+          live.remove();
+          source.close();
+        }
+      });
+
+      source.onerror = () => {
+        status.textContent = 'Assistant stream failed.';
+        source.close();
+      };
     }
 
     form.addEventListener('submit', async (event) => {
@@ -199,9 +309,10 @@ const chatPageHTML = `<!doctype html>
         status.textContent = payload?.message || 'Failed to save message.';
         return;
       }
-      status.textContent = payload?.notice || 'Message accepted.';
+      appendUserMessage(payload.message);
       content.value = '';
-      await loadMessages();
+      status.textContent = 'Waiting for assistant…';
+      await streamAssistant(payload.stream_url);
     });
 
     loadMessages();
