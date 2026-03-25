@@ -15,6 +15,7 @@ import (
 	"knowledge_base_RAG/internal/vector"
 
 	langchainembeddings "github.com/tmc/langchaingo/embeddings"
+	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
@@ -88,4 +89,23 @@ func (d *Dependencies) NewConversationService(kbService *KnowledgeBaseService) *
 		sqlite.NewConversationRepo(d.Config.SQLitePath),
 		sqlite.NewMessageRepo(d.Config.SQLitePath),
 	)
+}
+
+func (d *Dependencies) NewChatService(kbService *KnowledgeBaseService, llm llms.Model, embedder langchainembeddings.Embedder) (*ChatService, error) {
+	vectorStore, err := d.NewVectorStore(embedder)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewChatService(
+		kbService,
+		sqlite.NewConversationRepo(d.Config.SQLitePath),
+		sqlite.NewMessageRepo(d.Config.SQLitePath),
+		sqlite.NewCitationRepo(d.Config.SQLitePath),
+		vectorStore,
+		llm,
+		d.Config.RAGTopK,
+		float32(d.Config.RAGScoreThreshold),
+		d.Config.ChatHistoryMaxTurns,
+	), nil
 }

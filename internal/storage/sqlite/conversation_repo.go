@@ -74,11 +74,6 @@ LIMIT 1;`, sqlQuote(kbID), sqlQuote(conversationID))
 }
 
 func (r *ConversationRepo) Update(ctx context.Context, conv domain.Conversation) error {
-	lastMessageAt := "NULL"
-	if conv.LastMessageAt != nil {
-		lastMessageAt = sqlQuote(conv.LastMessageAt.Format(time.RFC3339Nano))
-	}
-
 	query := fmt.Sprintf(`
 UPDATE conversations
 SET title = %s,
