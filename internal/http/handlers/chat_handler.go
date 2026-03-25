@@ -253,43 +253,65 @@ const chatPageHTML = `<!doctype html>
       return document.getElementById('assistant-live');
     }
 
-    async function streamAssistant(streamURL) {
+    function streamAssistant(streamURL) {
       const live = ensureAssistantMessage();
       const contentNode = live.querySelector('.assistant-content');
       const citationsNode = live.querySelector('.assistant-citations');
-      const source = new EventSource(streamURL);
 
-      source.addEventListener('assistant', (event) => {
-        const payload = JSON.parse(event.data);
-        if (payload.type === 'snapshot') {
-          contentNode.textContent = '';
-          citationsNode.innerHTML = '';
-          status.textContent = 'Generating answer…';
-          return;
-        }
-        if (payload.type === 'token') {
-          contentNode.textContent += payload.content || '';
-          return;
-        }
-        if (payload.type === 'completed') {
-          contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
-          citationsNode.innerHTML = renderCitations(payload.citations || []);
-          live.removeAttribute('id');
-          status.textContent = 'Answer complete.';
+      return new Promise((resolve, reject) => {
+        const source = new EventSource(streamURL);
+        let terminal = false;
+        let sawPayload = false;
+
+        source.addEventListener('assistant', (event) => {
+          sawPayload = true;
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'snapshot') {
+            contentNode.textContent = '';
+            citationsNode.innerHTML = '';
+            status.textContent = 'Generating answer…';
+            return;
+          }
+          if (payload.type === 'token') {
+            contentNode.textContent += payload.content || '';
+            return;
+          }
+          if (payload.type === 'completed') {
+            terminal = true;
+            contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
+            citationsNode.innerHTML = renderCitations(payload.citations || []);
+            live.removeAttribute('id');
+            status.textContent = 'Answer complete.';
+            source.close();
+            resolve(payload);
+            return;
+          }
+          if (payload.type === 'error') {
+            terminal = true;
+            status.textContent = payload.error || 'Assistant response failed.';
+            live.remove();
+            source.close();
+            reject(new Error(payload.error || 'Assistant response failed.'));
+          }
+        });
+
+        source.onerror = () => {
           source.close();
-          return;
-        }
-        if (payload.type === 'error') {
-          status.textContent = payload.error || 'Assistant response failed.';
+          if (terminal) {
+            return;
+          }
+          if (sawPayload && contentNode.textContent.trim()) {
+            terminal = true;
+            live.removeAttribute('id');
+            status.textContent = 'Answer complete.';
+            resolve({ content: contentNode.textContent });
+            return;
+          }
           live.remove();
-          source.close();
-        }
+          status.textContent = 'Assistant stream failed.';
+          reject(new Error('Assistant stream failed.'));
+        };
       });
-
-      source.onerror = () => {
-        status.textContent = 'Assistant stream failed.';
-        source.close();
-      };
     }
 
     form.addEventListener('submit', async (event) => {
@@ -312,7 +334,12 @@ const chatPageHTML = `<!doctype html>
       appendUserMessage(payload.message);
       content.value = '';
       status.textContent = 'Waiting for assistant…';
-      await streamAssistant(payload.stream_url);
+      try {
+        await streamAssistant(payload.stream_url);
+        await loadMessages();
+      } catch (_) {
+        // status text is already set in stream handling
+      }
     });
 
     loadMessages();
