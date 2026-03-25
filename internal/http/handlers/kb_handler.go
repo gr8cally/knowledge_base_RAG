@@ -221,6 +221,12 @@ const kbDetailHTML = `<!doctype html>
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
     button.secondary { background: #f0e5d3; color: #1f1a17; border: 1px solid #d9cbb5; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .conversation-list { display: grid; gap: 0.85rem; margin-top: 1rem; }
+    .conversation-item { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.9rem 1rem; background: #fff; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+    .conversation-main { min-width: 0; }
+    .conversation-title { font-weight: 700; margin-bottom: 0.25rem; }
+    .conversation-meta { font-size: 0.9rem; color: #6f6256; }
+    .conversation-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.7rem 0.8rem; border: 1px solid #d9cbb5; border-radius: 10px; background: #fff; }
     input[type="file"] { width: 100%; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
@@ -290,6 +296,23 @@ const kbDetailHTML = `<!doctype html>
       return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     }
 
+    function formatDateTime(value) {
+      if (!value) {
+        return '-';
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return esc(value);
+      }
+      return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      }).format(date);
+    }
+
     async function refreshDocuments() {
       const resp = await fetch('/api/kbs/' + kbID + '/documents');
       if (!resp.ok) {
@@ -327,16 +350,18 @@ const kbDetailHTML = `<!doctype html>
         conversationsTable.innerHTML = '<p class="muted">No conversations yet.</p>';
         return;
       }
-      conversationsTable.innerHTML = '<table><thead><tr><th>Title</th><th>Updated</th><th>Actions</th></tr></thead><tbody>' +
-        items.map(item => '<tr>' +
-          '<td><a href="/kbs/' + kbID + '/conversations/' + esc(item.id) + '">' + esc(item.title) + '</a></td>' +
-          '<td>' + esc(item.last_message_at || item.updated_at || item.created_at) + '</td>' +
-          '<td><div class="actions">' +
+      conversationsTable.innerHTML = '<div class="conversation-list">' +
+        items.map(item => '<div class="conversation-item">' +
+          '<div class="conversation-main">' +
+            '<div class="conversation-title"><a href="/kbs/' + kbID + '/conversations/' + esc(item.id) + '">' + esc(item.title) + '</a></div>' +
+            '<div class="conversation-meta">Last active ' + esc(formatDateTime(item.last_message_at || item.updated_at || item.created_at)) + '</div>' +
+          '</div>' +
+          '<div class="conversation-actions">' +
             '<button class="secondary" type="button" data-conversation-action="open" data-conversation-id="' + esc(item.id) + '">Open</button>' +
             '<button class="secondary" type="button" data-conversation-action="archive" data-conversation-id="' + esc(item.id) + '">Archive</button>' +
-          '</div></td>' +
-        '</tr>').join('') +
-        '</tbody></table>';
+          '</div>' +
+        '</div>').join('') +
+      '</div>';
     }
 
     function watchJob(jobID) {
