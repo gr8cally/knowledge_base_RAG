@@ -26,7 +26,6 @@ cp .env.example .env
 2. Generate templates and run:
 
 ```bash
-templ generate
 go build ./cmd/server
 go run ./cmd/server
 ```
