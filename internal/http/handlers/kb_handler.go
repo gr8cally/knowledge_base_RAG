@@ -221,6 +221,10 @@ const kbDetailHTML = `<!doctype html>
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
     button.secondary { background: #f0e5d3; color: #1f1a17; border: 1px solid #d9cbb5; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .hero { background: linear-gradient(135deg, #fffaf0 0%, #f3e6d1 100%); }
+    .hero-actions { margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .section-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-end; margin-bottom: 0.9rem; }
+    .section-head p { margin: 0.2rem 0 0 0; }
     .conversation-list { display: grid; gap: 0.85rem; margin-top: 1rem; }
     .conversation-item { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.9rem 1rem; background: #fff; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
     .conversation-main { min-width: 0; }
@@ -229,27 +233,40 @@ const kbDetailHTML = `<!doctype html>
     .conversation-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.7rem 0.8rem; border: 1px solid #d9cbb5; border-radius: 10px; background: #fff; }
     input[type="file"] { width: 100%; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { text-align: left; padding: 0.65rem 0.4rem; border-bottom: 1px solid #eadfcd; vertical-align: top; }
     .status { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 999px; background: #f0e5d3; }
     .status.ready, .status.completed { background: #d7f0d8; color: #20542a; }
     .status.processing, .status.running, .status.queued { background: #fde7b2; color: #694d00; }
     .status.error, .status.failed { background: #f7d8d8; color: #7a1f1f; }
     .stack { display: grid; gap: 1rem; }
     .message { margin-top: 0.75rem; min-height: 1.5rem; }
+    .doc-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
+    .doc-item { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.85rem 1rem; background: #fff; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+    .doc-main { min-width: 0; }
+    .doc-title { font-weight: 700; margin-bottom: 0.3rem; }
+    .doc-meta { font-size: 0.9rem; color: #6f6256; display: grid; gap: 0.2rem; }
+    .doc-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .empty { padding: 1rem 0; color: #6f6256; }
     code { background: #f0e5d3; padding: 0.1rem 0.3rem; border-radius: 6px; }
   </style>
 </head>
 <body data-kb-id="{{ .ID }}">
   <main class="shell">
-    <section class="card">
+    <section class="card hero">
       <p><a href="/">Back</a></p>
       <h1>{{ .Name }}</h1>
       <p class="muted">{{ .Description }}</p>
       <small class="muted">Namespace: {{ .Namespace }}</small>
+      <div class="hero-actions">
+        <button id="hero-new-conversation" type="button">New Conversation</button>
+      </div>
     </section>
     <section class="card">
-      <h2>Conversations</h2>
+      <div class="section-head">
+        <div>
+          <h2>Conversations</h2>
+          <p class="muted">Start with questions and resume previous threads here.</p>
+        </div>
+      </div>
       <div class="stack">
         <form id="conversation-form">
           <input id="conversation-title" type="text" placeholder="Conversation title" />
@@ -262,7 +279,12 @@ const kbDetailHTML = `<!doctype html>
       <div id="conversations-table" class="muted">Loading conversations…</div>
     </section>
     <section class="card">
-      <h2>Documents</h2>
+      <div class="section-head">
+        <div>
+          <h2>Documents</h2>
+          <p class="muted">Manage the source files that ground conversation answers.</p>
+        </div>
+      </div>
       <div class="stack">
         <form id="upload-form">
           <input id="upload-files" type="file" name="files" multiple />
@@ -283,6 +305,7 @@ const kbDetailHTML = `<!doctype html>
     const uploadMessage = document.getElementById('upload-message');
     const documentsTable = document.getElementById('documents-table');
     const reindexAllButton = document.getElementById('reindex-all');
+    const heroNewConversation = document.getElementById('hero-new-conversation');
     const conversationForm = document.getElementById('conversation-form');
     const conversationTitle = document.getElementById('conversation-title');
     const conversationMessage = document.getElementById('conversation-message');
@@ -321,22 +344,24 @@ const kbDetailHTML = `<!doctype html>
       }
       const docs = await resp.json();
       if (!docs.length) {
-        documentsTable.innerHTML = '<p class="muted">No documents yet.</p>';
+        documentsTable.innerHTML = '<div class="empty">Upload documents to ground answers in this knowledge base.</div>';
         return;
       }
-      documentsTable.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Parser</th><th>Chunks</th><th>Error</th><th>Actions</th></tr></thead><tbody>' +
-        docs.map(doc => '<tr>' +
-          '<td>' + esc(doc.display_name) + '</td>' +
-          '<td><span class="' + statusClass(doc.status) + '">' + esc(doc.status) + '</span></td>' +
-          '<td>' + esc(doc.parser_used || '-') + '</td>' +
-          '<td>' + esc(doc.chunk_count) + '</td>' +
-          '<td class="muted">' + esc(doc.error_message || '') + '</td>' +
-          '<td><div class="actions">' +
+      documentsTable.innerHTML = '<div class="doc-list">' +
+        docs.map(doc => '<div class="doc-item">' +
+          '<div class="doc-main">' +
+            '<div class="doc-title">' + esc(doc.display_name) + ' <span class="' + statusClass(doc.status) + '">' + esc(doc.status) + '</span></div>' +
+            '<div class="doc-meta">' +
+              '<div>Parser: ' + esc(doc.parser_used || 'pending') + ' · Chunks: ' + esc(doc.chunk_count) + '</div>' +
+              (doc.error_message ? '<div>Error: ' + esc(doc.error_message) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="doc-actions">' +
             '<button class="secondary" type="button" data-action="refresh" data-document-id="' + esc(doc.id) + '">Refresh</button>' +
             '<button class="secondary" type="button" data-action="delete" data-document-id="' + esc(doc.id) + '">Delete</button>' +
-          '</div></td>' +
-        '</tr>').join('') +
-        '</tbody></table>';
+          '</div>' +
+        '</div>').join('') +
+      '</div>';
     }
 
     async function refreshConversations() {
@@ -347,7 +372,7 @@ const kbDetailHTML = `<!doctype html>
       }
       const items = await resp.json();
       if (!items.length) {
-        conversationsTable.innerHTML = '<p class="muted">No conversations yet.</p>';
+        conversationsTable.innerHTML = '<div class="empty">Start your first conversation to ask questions about this knowledge base.</div>';
         return;
       }
       conversationsTable.innerHTML = '<div class="conversation-list">' +
@@ -408,6 +433,11 @@ const kbDetailHTML = `<!doctype html>
         }
       }
       uploadForm.reset();
+    });
+
+    heroNewConversation.addEventListener('click', () => {
+      conversationTitle.focus();
+      conversationTitle.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     documentsTable.addEventListener('click', async (event) => {

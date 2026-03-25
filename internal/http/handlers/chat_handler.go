@@ -154,16 +154,17 @@ const chatPageHTML = `<!doctype html>
   <title>{{ .Conversation.Title }}</title>
   <style>
     body { font-family: sans-serif; margin: 2rem; background: #f6f1e8; color: #1f1a17; }
-    .shell { max-width: 960px; margin: 0 auto; }
+    .shell { max-width: 880px; margin: 0 auto; }
     .card { background: #fffdf8; border: 1px solid #d9cbb5; border-radius: 14px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
     .muted { color: #6f6256; }
     a { color: #8d3d1f; text-decoration: none; }
     .timeline { display: grid; gap: 0.75rem; }
-    .msg { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.85rem 1rem; background: #fff; }
-    .msg.user { background: #f0e5d3; }
+    .msg { border: 1px solid #eadfcd; border-radius: 12px; padding: 0.95rem 1.05rem; background: #fff; max-width: 76ch; line-height: 1.6; }
+    .msg.user { background: #f0e5d3; margin-left: auto; }
+    .msg.assistant { background: #fff; }
     .meta { font-size: 0.85rem; color: #6f6256; margin-bottom: 0.35rem; text-transform: uppercase; }
     .stamp { font-size: 0.8rem; color: #8a7b6d; margin-top: 0.6rem; }
-    textarea { width: 100%; min-height: 100px; }
+    textarea { width: 100%; min-height: 110px; box-sizing: border-box; line-height: 1.5; }
     button { background: #8d3d1f; color: #fff; border: 0; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer; }
     code { background: #f0e5d3; padding: 0.1rem 0.3rem; border-radius: 6px; }
   </style>
@@ -227,7 +228,7 @@ const chatPageHTML = `<!doctype html>
       }
       const messages = await resp.json();
       if (!messages.length) {
-        timeline.innerHTML = '<p class="muted">No messages yet.</p>';
+        timeline.innerHTML = '<p class="muted">Ask the first question in this conversation.</p>';
         return;
       }
       timeline.innerHTML = messages.map(item => '<div class="msg ' + esc(item.message.role) + '">' +
