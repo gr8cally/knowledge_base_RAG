@@ -1,0 +1,14 @@
+package templates
+
+import "knowledge_base_RAG/internal/domain"
+
+templ DocumentList(activeKB *domain.KnowledgeBase) {
+	<section class="workspace-panel">
+		<h2>Sources</h2>
+		if activeKB == nil {
+			<p class="muted">Document controls will appear once a knowledge base is selected.</p>
+		} else {
+			<p class="muted">Document upload and compact source management move here in later phases.</p>
+		}
+	</section>
+}

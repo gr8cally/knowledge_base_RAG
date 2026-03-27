@@ -1,0 +1,24 @@
+package templates
+
+import (
+	"fmt"
+	"knowledge_base_RAG/internal/domain"
+)
+
+templ KBSummary(activeKB *domain.KnowledgeBase, conversationCount int) {
+	<section class="workspace-panel">
+		<h2>Active KB</h2>
+		if activeKB == nil {
+			<p class="muted">Select or create a knowledge base to begin.</p>
+		} else {
+			<div class="summary-card">
+				<div class="summary-title">{ activeKB.Name }</div>
+				if activeKB.Description != "" {
+					<p class="muted">{ activeKB.Description }</p>
+				}
+				<p class="muted">Namespace: { activeKB.Namespace }</p>
+				<p class="muted">{ fmt.Sprintf("%d conversations", conversationCount) }</p>
+			</div>
+		}
+	</section>
+}

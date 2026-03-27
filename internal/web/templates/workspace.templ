@@ -1,0 +1,32 @@
+package templates
+
+import "knowledge_base_RAG/internal/domain"
+
+type WorkspacePageData struct {
+	KnowledgeBases        []domain.KnowledgeBase
+	ActiveKBID           string
+	ActiveKB             *domain.KnowledgeBase
+	Conversations        []domain.Conversation
+	ActiveConversationID string
+}
+
+templ WorkspacePage(data WorkspacePageData) {
+	@Layout("Workspace") {
+		<div class="workspace-shell">
+			<aside class="workspace-sidebar">
+				<section class="workspace-panel">
+					<h1>Knowledge Workspace</h1>
+					<p class="muted">Phase 1 shell for the single-page experience.</p>
+				</section>
+				@KBList(data.KnowledgeBases, data.ActiveKBID)
+				@KBSummary(data.ActiveKB, len(data.Conversations))
+				@ConversationList(data.Conversations, data.ActiveConversationID, data.ActiveKBID)
+				@DocumentList(data.ActiveKB)
+			</aside>
+			<section class="workspace-main">
+				@ChatHeader(data.ActiveKB, data.ActiveConversationID)
+				@MessageTimeline(data.ActiveKB, data.ActiveConversationID)
+			</section>
+		</div>
+	}
+}
