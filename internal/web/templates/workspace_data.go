@@ -8,4 +8,5 @@ type WorkspacePageData struct {
 	ActiveKB             *domain.KnowledgeBase
 	Conversations        []domain.Conversation
 	ActiveConversationID string
+	ActiveConversation   *domain.Conversation
 }

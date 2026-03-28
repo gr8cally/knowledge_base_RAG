@@ -11,6 +11,7 @@ import (
 
 type workspaceConversationService interface {
 	List(ctx context.Context, kbID string) ([]domain.Conversation, error)
+	Create(ctx context.Context, kbID, title string) (domain.Conversation, error)
 }
 
 type WorkspaceHandler struct {
@@ -42,6 +43,39 @@ func (h *WorkspaceHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	if err := templates.WorkspacePage(data).Render(r.Context(), w); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "render_workspace_failed", err.Error())
+		return
+	}
+}
+
+func (h *WorkspaceHandler) CreateConversation(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_form", "invalid conversation form")
+		return
+	}
+
+	kbID := r.FormValue("kb_id")
+	if kbID == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing_kb", "kb_id is required")
+		return
+	}
+
+	conversation, err := h.conversationService.Create(r.Context(), kbID, r.FormValue("title"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "create_conversation_failed", err.Error())
+		return
+	}
+
+	pushURL := "/?kb=" + kbID + "&conversation=" + conversation.ID
+	w.Header().Set("HX-Push-Url", pushURL)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	data, err := h.loadWorkspaceData(r.Context(), kbID, conversation.ID)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "workspace_load_failed", err.Error())
+		return
+	}
+	if err := templates.WorkspaceShell(data).Render(r.Context(), w); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "render_workspace_shell_failed", err.Error())
 		return
 	}
 }
@@ -92,11 +126,22 @@ func (h *WorkspaceHandler) loadWorkspaceData(ctx context.Context, selectedKBID s
 		activeConversationID = conversations[0].ID
 	}
 
+	var activeConversation *domain.Conversation
+	if activeConversationID != "" {
+		for i := range conversations {
+			if conversations[i].ID == activeConversationID {
+				activeConversation = &conversations[i]
+				break
+			}
+		}
+	}
+
 	return templates.WorkspacePageData{
 		KnowledgeBases:       kbs,
 		ActiveKBID:           selectedKBID,
 		ActiveKB:             activeKB,
 		Conversations:        conversations,
 		ActiveConversationID: activeConversationID,
+		ActiveConversation:   activeConversation,
 	}, nil
 }
