@@ -152,6 +152,26 @@ templ WorkspacePage(data WorkspacePageData) {
 			.conversation-create button:hover {
 				filter: brightness(1.03);
 			}
+			.secondary-pill,
+			.danger-link {
+				font: inherit;
+				font-size: 0.84rem;
+				font-weight: 700;
+				border-radius: 999px;
+				padding: 8px 12px;
+			}
+			.secondary-pill {
+				border: 1px solid var(--line);
+				background: rgba(255, 255, 255, 0.78);
+				color: var(--ink);
+				cursor: pointer;
+			}
+			.danger-link {
+				border: 0;
+				background: transparent;
+				color: var(--accent-2);
+				cursor: pointer;
+			}
 			.list-item {
 				display: block;
 				padding: 14px 15px;
@@ -219,6 +239,104 @@ templ WorkspacePage(data WorkspacePageData) {
 			.chat-pane {
 				display: grid;
 				gap: 18px;
+			}
+			.sources-upload {
+				display: grid;
+				gap: 10px;
+				margin-top: 12px;
+			}
+			.sources-upload input[type="file"] {
+				width: 100%;
+				font: inherit;
+				color: var(--muted);
+			}
+			.sources-upload button {
+				justify-self: start;
+				padding: 11px 16px;
+				border: 0;
+				border-radius: 999px;
+				background: linear-gradient(180deg, #13756d, #0f625c);
+				color: #fff9f0;
+				font: inherit;
+				font-weight: 700;
+				cursor: pointer;
+				box-shadow: 0 10px 18px rgba(15, 118, 110, 0.16);
+			}
+			.sources-notice,
+			.sources-empty {
+				margin-top: 12px;
+			}
+			.sources-stack {
+				display: grid;
+				gap: 10px;
+				margin-top: 14px;
+			}
+			.source-item {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 14px;
+				padding: 14px 0;
+				border-top: 1px solid var(--line-soft);
+			}
+			.source-item:first-child {
+				border-top: 0;
+				padding-top: 0;
+			}
+			.source-head {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				flex-wrap: wrap;
+			}
+			.source-name {
+				font-size: 0.98rem;
+				font-weight: 700;
+				color: var(--ink);
+			}
+			.source-meta {
+				margin-top: 6px;
+				font-size: 0.9rem;
+				color: var(--muted);
+			}
+			.source-error {
+				margin-top: 8px;
+				color: #8c2f26;
+				font-size: 0.9rem;
+				line-height: 1.4;
+			}
+			.source-actions {
+				display: flex;
+				align-items: start;
+				gap: 8px;
+				flex-wrap: wrap;
+			}
+			.status-pill {
+				display: inline-flex;
+				align-items: center;
+				padding: 4px 9px;
+				border-radius: 999px;
+				font-size: 0.75rem;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				background: rgba(84, 67, 44, 0.10);
+				color: var(--muted);
+			}
+			.status-pill.ready,
+			.status-pill.completed {
+				background: rgba(37, 99, 65, 0.14);
+				color: #24593a;
+			}
+			.status-pill.processing,
+			.status-pill.running,
+			.status-pill.queued {
+				background: rgba(180, 115, 17, 0.14);
+				color: #7b5200;
+			}
+			.status-pill.error,
+			.status-pill.failed {
+				background: rgba(169, 53, 37, 0.13);
+				color: #8c2f26;
 			}
 			.chat-timeline {
 				display: grid;
@@ -353,6 +471,12 @@ templ WorkspacePage(data WorkspacePageData) {
 				.conversation-create {
 					grid-template-columns: 1fr;
 				}
+				.source-item {
+					grid-template-columns: 1fr;
+				}
+				.source-actions {
+					justify-content: flex-start;
+				}
 				.chat-composer-actions {
 					flex-direction: column;
 					align-items: stretch;
@@ -376,7 +500,7 @@ templ WorkspaceShell(data WorkspacePageData) {
 			@components.KBList(data.KnowledgeBases, data.ActiveKBID)
 			@components.KBSummary(data.ActiveKB, len(data.Conversations))
 			@components.ConversationList(data.Conversations, data.ActiveConversationID, data.ActiveKBID)
-			@components.DocumentList(data.ActiveKB)
+			@components.DocumentList(data.ActiveKB, data.Documents, "")
 		</aside>
 		<section class="workspace-main">
 			@components.ChatHeader(data.ActiveKB, data.ActiveConversation)

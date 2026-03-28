@@ -1,14 +1,133 @@
 package components
 
-import "knowledge_base_RAG/internal/domain"
+import (
+	"fmt"
+	"knowledge_base_RAG/internal/domain"
+)
 
-templ DocumentList(activeKB *domain.KnowledgeBase) {
-	<section class="workspace-panel">
-		<h2>Sources</h2>
+templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, notice string) {
+	<section
+		id="sources-panel"
+		class="workspace-panel"
+		if activeKB != nil {
+			hx-get={ "/workspace/sources?kb=" + activeKB.ID }
+			hx-trigger="every 5s"
+			hx-target="#sources-panel"
+			hx-swap="outerHTML"
+		}
+	>
+		<div class="section-head">
+			<h2>Sources</h2>
+			if activeKB != nil {
+				<form
+					hx-post={ "/workspace/sources/reindex?kb=" + activeKB.ID }
+					hx-target="#sources-panel"
+					hx-swap="outerHTML"
+				>
+					<button class="secondary-pill" type="submit">Re-index All</button>
+				</form>
+			}
+		</div>
 		if activeKB == nil {
 			<p class="muted">Document controls will appear once a knowledge base is selected.</p>
 		} else {
-			<p class="muted">Document upload and compact source management move here in later phases.</p>
+			<form
+				class="sources-upload"
+				hx-post="/workspace/sources/upload"
+				hx-encoding="multipart/form-data"
+				hx-target="#sources-panel"
+				hx-swap="outerHTML"
+			>
+				<input type="hidden" name="kb_id" value={ activeKB.ID } />
+				<label class="chat-label" for="files">Upload files</label>
+				<input id="files" type="file" name="files" multiple />
+				<button type="submit">Upload</button>
+			</form>
+			if notice != "" {
+				<p class="sources-notice muted">{ notice }</p>
+			}
+			if len(items) == 0 {
+				<p class="muted sources-empty">Upload documents to ground answers in this knowledge base.</p>
+			} else {
+				<div class="sources-stack">
+					for _, item := range items {
+						<article class="source-item">
+							<div class="source-main">
+								<div class="source-head">
+									<div class="source-name">{ item.DisplayName }</div>
+									<span class={ "status-pill", templ.KV(item.Status, true) }>{ item.Status }</span>
+								</div>
+								<div class="source-meta">
+									{ fmt.Sprintf("%s", formatSourceMeta(item)) }
+								</div>
+								if item.ErrorMessage != "" {
+									<div class="source-error">{ item.ErrorMessage }</div>
+								}
+							</div>
+							<div class="source-actions">
+								<form
+									hx-post={ "/workspace/sources/" + item.ID + "/refresh?kb=" + activeKB.ID }
+									hx-target="#sources-panel"
+									hx-swap="outerHTML"
+								>
+									<button class="secondary-pill" type="submit">Refresh</button>
+								</form>
+								<button
+									class="danger-link"
+									type="button"
+									hx-delete={ "/workspace/sources/" + item.ID + "?kb=" + activeKB.ID }
+									hx-target="#sources-panel"
+									hx-swap="outerHTML"
+									hx-confirm={ "Delete " + item.DisplayName + "?" }
+								>
+									Delete
+								</button>
+							</div>
+						</article>
+					}
+				</div>
+			}
 		}
 	</section>
+}
+
+func formatSourceMeta(item domain.Document) string {
+	parts := []string{}
+	if item.ParserUsed != "" {
+		parts = append(parts, "parser "+item.ParserUsed)
+	}
+	if item.ChunkCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d chunks", item.ChunkCount))
+	}
+	if item.SizeBytes > 0 {
+		parts = append(parts, humanSize(item.SizeBytes))
+	}
+	if len(parts) == 0 {
+		return "Awaiting ingestion details"
+	}
+	return joinParts(parts)
+}
+
+func humanSize(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for value := n / unit; value >= unit; value /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+func joinParts(parts []string) string {
+	out := ""
+	for i, part := range parts {
+		if i > 0 {
+			out += " · "
+		}
+		out += part
+	}
+	return out
 }
