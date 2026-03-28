@@ -75,7 +75,7 @@ templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversation *domain
 					}
 
 					function stripSourceLine(content) {
-						return String(content ?? '').replace(/\n\nSources:\s*(\[\d+\]\s*)+$/m, '');
+						return String(content ?? '').replace(/\n\nSources:\s*(\[\d+\]\s*)+$/, '');
 					}
 
 					function renderMessageContent(content) {
