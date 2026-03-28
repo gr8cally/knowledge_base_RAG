@@ -1,0 +1,53 @@
+package components
+
+import (
+	"fmt"
+	"knowledge_base_RAG/internal/domain"
+)
+
+templ ConversationList(items []domain.Conversation, activeConversationID string, activeKBID string) {
+	<section class="workspace-panel">
+		<div class="section-head">
+			<h2>Conversations</h2>
+		</div>
+		if activeKBID == "" {
+			<p class="muted">Choose a knowledge base first.</p>
+		} else {
+			<form
+				class="conversation-create"
+				hx-post="/workspace/conversations"
+				hx-target="#workspace-shell"
+				hx-select="#workspace-shell"
+				hx-swap="outerHTML"
+			>
+				<input type="hidden" name="kb_id" value={ activeKBID } />
+				<input
+					type="text"
+					name="title"
+					placeholder="New conversation title"
+					autocomplete="off"
+				/>
+				<button type="submit">New Conversation</button>
+			</form>
+			if len(items) == 0 {
+				<p class="muted">No conversations yet for this knowledge base.</p>
+			}
+			<div class="list-stack">
+				for _, item := range items {
+					<a
+						href={ templ.SafeURL("/?kb=" + activeKBID + "&conversation=" + item.ID) }
+						hx-get={ "/?kb=" + activeKBID + "&conversation=" + item.ID }
+						hx-target="#workspace-shell"
+						hx-select="#workspace-shell"
+						hx-swap="outerHTML"
+						hx-push-url="true"
+						class={ "list-item", templ.KV("active", item.ID == activeConversationID) }
+					>
+						<div class="list-title">{ item.Title }</div>
+						<div class="list-meta">{ fmt.Sprintf("Updated %s", item.UpdatedAt.Format("Jan 2, 2006 3:04 PM")) }</div>
+					</a>
+				}
+			</div>
+		}
+	</section>
+}

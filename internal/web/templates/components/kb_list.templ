@@ -1,0 +1,60 @@
+package components
+
+import "knowledge_base_RAG/internal/domain"
+
+templ KBList(items []domain.KnowledgeBase, activeKBID string) {
+	<section class="workspace-panel" x-data="{ creatingKB: false }">
+		<div class="section-head">
+			<h2>Knowledge Bases</h2>
+			<button class="secondary-pill kb-create-toggle" type="button" @click="creatingKB = !creatingKB">Add New</button>
+		</div>
+		<div class="kb-create-wrap" x-show="creatingKB" x-cloak>
+			<form
+				class="kb-create"
+				hx-post="/workspace/kbs"
+				hx-target="#workspace-shell"
+				hx-select="#workspace-shell"
+				hx-swap="outerHTML"
+			>
+				<input
+					type="text"
+					name="name"
+					placeholder="New knowledge base"
+					autocomplete="off"
+					x-init="$watch('creatingKB', value => { if (value) { $nextTick(() => $el.focus()) } })"
+				/>
+				<textarea
+					name="description"
+					rows="2"
+					placeholder="Short description"
+				></textarea>
+				<div class="kb-create-actions">
+					<button type="submit">Create KB</button>
+					<button class="secondary-pill" type="button" @click="creatingKB = false">Cancel</button>
+				</div>
+			</form>
+		</div>
+		if len(items) == 0 {
+			<p class="muted">No knowledge bases yet.</p>
+		} else {
+			<div class="list-stack">
+				for _, item := range items {
+					<a
+						href={ templ.SafeURL("/?kb=" + item.ID) }
+						hx-get={ "/?kb=" + item.ID }
+						hx-target="#workspace-shell"
+						hx-select="#workspace-shell"
+						hx-swap="outerHTML"
+						hx-push-url="true"
+						class={ "list-item", templ.KV("active", item.ID == activeKBID) }
+					>
+						<div class="list-title">{ item.Name }</div>
+						if item.Description != "" {
+							<div class="list-meta">{ item.Description }</div>
+						}
+					</a>
+				}
+			</div>
+		}
+	</section>
+}
