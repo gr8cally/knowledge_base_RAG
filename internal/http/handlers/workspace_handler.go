@@ -103,8 +103,13 @@ func (h *WorkspaceHandler) SourcesPanel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.renderSourcesPanel(r.Context(), w, kbID, ""); err != nil {
+		if errors.Is(err, app.ErrKnowledgeBaseNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		writeAPIError(w, http.StatusInternalServerError, "render_sources_failed", err.Error())
 		return
+	}
 	}
 }
 
