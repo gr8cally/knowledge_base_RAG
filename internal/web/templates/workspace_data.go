@@ -9,4 +9,5 @@ type WorkspacePageData struct {
 	Conversations        []domain.Conversation
 	ActiveConversationID string
 	ActiveConversation   *domain.Conversation
+	Documents            []domain.Document
 }
