@@ -15,6 +15,7 @@ internal/web/templates/components/*_templ.go
 third_party/*
 
 /docs
+/plans
 
 # Binaries
 server
