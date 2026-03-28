@@ -120,6 +120,38 @@ templ WorkspacePage(data WorkspacePageData) {
 				gap: 10px;
 				margin-top: 12px;
 			}
+			.conversation-create {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 10px;
+				margin-top: 12px;
+			}
+			.conversation-create input,
+			.conversation-create button {
+				border-radius: 14px;
+				border: 1px solid var(--line);
+				font: inherit;
+				box-sizing: border-box;
+			}
+			.conversation-create input {
+				padding: 12px 14px;
+				background: rgba(255, 255, 255, 0.84);
+				color: var(--ink);
+			}
+			.conversation-create input::placeholder {
+				color: var(--muted);
+			}
+			.conversation-create button {
+				padding: 12px 16px;
+				background: linear-gradient(180deg, #13756d, #0f625c);
+				color: #fff9f0;
+				cursor: pointer;
+				font-weight: 700;
+				box-shadow: 0 10px 18px rgba(15, 118, 110, 0.16);
+			}
+			.conversation-create button:hover {
+				filter: brightness(1.03);
+			}
 			.list-item {
 				display: block;
 				padding: 14px 15px;
@@ -210,6 +242,9 @@ templ WorkspacePage(data WorkspacePageData) {
 					overflow: visible;
 					padding-right: 0;
 				}
+				.conversation-create {
+					grid-template-columns: 1fr;
+				}
 			}
 		</style>
 		@WorkspaceShell(data)
@@ -229,8 +264,8 @@ templ WorkspaceShell(data WorkspacePageData) {
 			@components.DocumentList(data.ActiveKB)
 		</aside>
 		<section class="workspace-main">
-			@components.ChatHeader(data.ActiveKB, data.ActiveConversationID)
-			@components.MessageTimeline(data.ActiveKB, data.ActiveConversationID)
+			@components.ChatHeader(data.ActiveKB, data.ActiveConversation)
+			@components.MessageTimeline(data.ActiveKB, data.ActiveConversation)
 		</section>
 	</div>
 }
