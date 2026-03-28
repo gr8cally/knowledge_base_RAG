@@ -9,12 +9,6 @@ templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, noti
 	<section
 		id="sources-panel"
 		class="workspace-panel"
-		if activeKB != nil {
-			hx-get={ "/workspace/sources?kb=" + activeKB.ID }
-			hx-trigger="every 5s"
-			hx-target="#sources-panel"
-			hx-swap="outerHTML"
-		}
 	>
 		<div class="section-head">
 			<h2>Sources</h2>
@@ -33,6 +27,7 @@ templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, noti
 		} else {
 			<form
 				class="sources-upload"
+				x-data="{ fileNames: 'No files selected.' }"
 				hx-post="/workspace/sources/upload"
 				hx-encoding="multipart/form-data"
 				hx-target="#sources-panel"
@@ -40,8 +35,14 @@ templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, noti
 			>
 				<input type="hidden" name="kb_id" value={ activeKB.ID } />
 				<label class="chat-label" for="files">Upload files</label>
-				<input id="files" type="file" name="files" multiple />
-				<p id="sources-selected-files" class="muted sources-selected-files">No files selected.</p>
+				<input
+					id="files"
+					type="file"
+					name="files"
+					multiple
+					@change="fileNames = $event.target.files.length ? Array.from($event.target.files).map(file => file.name).join(', ') : 'No files selected.'"
+				/>
+				<p class="muted sources-selected-files" x-text="fileNames">No files selected.</p>
 				<button type="submit">Upload</button>
 			</form>
 			if notice != "" {
@@ -89,29 +90,6 @@ templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, noti
 				</div>
 			}
 		}
-		<script>
-			(() => {
-				const panel = document.currentScript.previousElementSibling;
-				if (!panel || panel.dataset.sourcesBound === 'true') {
-					return;
-				}
-				panel.dataset.sourcesBound = 'true';
-
-				const input = panel.querySelector('#files');
-				const selected = panel.querySelector('#sources-selected-files');
-				if (!input || !selected) {
-					return;
-				}
-
-				input.addEventListener('change', () => {
-					if (!input.files || input.files.length === 0) {
-						selected.textContent = 'No files selected.';
-						return;
-					}
-					selected.textContent = Array.from(input.files).map(file => file.name).join(', ');
-				});
-			})();
-		</script>
 	</section>
 }
 
