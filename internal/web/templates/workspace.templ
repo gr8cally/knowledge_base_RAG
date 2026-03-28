@@ -378,10 +378,55 @@ templ WorkspacePage(data WorkspacePageData) {
 			}
 			.chat-citations {
 				margin-top: 12px;
-				padding-top: 12px;
 				border-top: 1px solid var(--line-soft);
+				padding-top: 12px;
+			}
+			.chat-citations summary {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				cursor: pointer;
+				list-style: none;
 				color: var(--muted);
 				font-size: 0.92rem;
+				font-weight: 700;
+			}
+			.chat-citations summary::-webkit-details-marker {
+				display: none;
+			}
+			.chat-citation-badges {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				flex-wrap: wrap;
+			}
+			.chat-citation-badge {
+				display: inline-flex;
+				align-items: center;
+				padding: 3px 8px;
+				border-radius: 999px;
+				background: rgba(15, 118, 110, 0.10);
+				color: var(--accent);
+				font-size: 0.8rem;
+				font-weight: 700;
+			}
+			.chat-citation-list {
+				margin: 12px 0 0 0;
+				padding-left: 18px;
+				color: var(--muted);
+			}
+			.chat-citation-item + .chat-citation-item {
+				margin-top: 10px;
+			}
+			.chat-citation-source {
+				font-size: 0.9rem;
+				font-weight: 700;
+				color: var(--ink);
+			}
+			.chat-citation-excerpt {
+				margin-top: 4px;
+				font-size: 0.9rem;
 				line-height: 1.5;
 			}
 			.chat-stamp {
