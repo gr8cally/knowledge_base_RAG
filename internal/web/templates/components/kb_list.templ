@@ -3,13 +3,12 @@ package components
 import "knowledge_base_RAG/internal/domain"
 
 templ KBList(items []domain.KnowledgeBase, activeKBID string) {
-	<section class="workspace-panel">
+	<section class="workspace-panel" x-data="{ creatingKB: false }">
 		<div class="section-head">
 			<h2>Knowledge Bases</h2>
-			<button class="secondary-pill kb-create-toggle" type="button">Add New</button>
+			<button class="secondary-pill kb-create-toggle" type="button" @click="creatingKB = !creatingKB">Add New</button>
 		</div>
-		<details class="kb-create-wrap">
-			<summary class="kb-create-summary">Create a knowledge base</summary>
+		<div class="kb-create-wrap" x-show="creatingKB" x-cloak>
 			<form
 				class="kb-create"
 				hx-post="/workspace/kbs"
@@ -22,15 +21,19 @@ templ KBList(items []domain.KnowledgeBase, activeKBID string) {
 					name="name"
 					placeholder="New knowledge base"
 					autocomplete="off"
+					x-init="$watch('creatingKB', value => { if (value) { $nextTick(() => $el.focus()) } })"
 				/>
 				<textarea
 					name="description"
 					rows="2"
 					placeholder="Short description"
 				></textarea>
-				<button type="submit">Create KB</button>
+				<div class="kb-create-actions">
+					<button type="submit">Create KB</button>
+					<button class="secondary-pill" type="button" @click="creatingKB = false">Cancel</button>
+				</div>
 			</form>
-		</details>
+		</div>
 		if len(items) == 0 {
 			<p class="muted">No knowledge bases yet.</p>
 		} else {
@@ -53,30 +56,5 @@ templ KBList(items []domain.KnowledgeBase, activeKBID string) {
 				}
 			</div>
 		}
-		<script>
-			(() => {
-				const panel = document.currentScript.previousElementSibling;
-				if (!panel || panel.dataset.kbCreateBound === 'true') {
-					return;
-				}
-				panel.dataset.kbCreateBound = 'true';
-
-				const toggle = panel.querySelector('.kb-create-toggle');
-				const wrap = panel.querySelector('.kb-create-wrap');
-				if (!toggle || !wrap) {
-					return;
-				}
-
-				toggle.addEventListener('click', () => {
-					wrap.open = !wrap.open;
-					if (wrap.open) {
-						const input = wrap.querySelector('input[name="name"]');
-						if (input) {
-							input.focus();
-						}
-					}
-				});
-			})();
-		</script>
 	</section>
 }

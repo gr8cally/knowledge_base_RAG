@@ -29,6 +29,9 @@ templ WorkspacePage(data WorkspacePageData) {
 			main {
 				min-height: 100vh;
 			}
+			[x-cloak] {
+				display: none !important;
+			}
 			.workspace-shell {
 				max-width: 1540px;
 				margin: 0 auto;
@@ -129,11 +132,14 @@ templ WorkspacePage(data WorkspacePageData) {
 				margin-top: 12px;
 				margin-bottom: 12px;
 			}
-			.kb-create-summary {
-				display: none;
-			}
 			.kb-create-toggle {
 				cursor: pointer;
+			}
+			.kb-create-actions {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				flex-wrap: wrap;
 			}
 			.kb-create input,
 			.kb-create textarea,
