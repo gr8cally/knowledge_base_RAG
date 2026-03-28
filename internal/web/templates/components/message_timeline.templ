@@ -63,9 +63,23 @@ templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversation *domain
 						if (!citations.length) {
 							return '';
 						}
-						return '<div class="chat-citations"><strong>Sources</strong><br />' +
-							citations.map(c => '[' + esc(c.citation_index) + '] ' + esc(c.source_label) + ' · ' + esc(c.excerpt)).join('<br />') +
-						'</div>';
+						return '<details class="chat-citations"><summary>' +
+							'<span>Sources</span>' +
+							'<span class="chat-citation-badges">' + citations.map(c => '<span class="chat-citation-badge">[' + esc(c.citation_index) + ']</span>').join('') + '</span>' +
+						'</summary><ol class="chat-citation-list">' +
+							citations.map(c => '<li class="chat-citation-item">' +
+								'<div class="chat-citation-source">[' + esc(c.citation_index) + '] ' + esc(c.source_label) + '</div>' +
+								'<div class="chat-citation-excerpt">' + esc(c.excerpt) + '</div>' +
+							'</li>').join('') +
+						'</ol></details>';
+					}
+
+					function stripSourceLine(content) {
+						return String(content ?? '').replace(/\n\nSources:\s*(\[\d+\]\s*)+$/m, '');
+					}
+
+					function renderMessageContent(content) {
+						return esc(stripSourceLine(content)).replaceAll('\n', '<br />');
 					}
 
 					async function loadMessages() {
@@ -81,7 +95,7 @@ templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversation *domain
 						}
 						timeline.innerHTML = messages.map(item => '<article class="chat-message ' + esc(item.message.role) + '">' +
 							'<div class="chat-message-role">' + esc(item.message.role) + '</div>' +
-							'<div class="chat-message-body">' + esc(item.message.content).replaceAll('\n', '<br />') + '</div>' +
+							'<div class="chat-message-body">' + renderMessageContent(item.message.content) + '</div>' +
 							renderCitations(item.citations || []) +
 							'<div class="chat-stamp">' + esc(formatDateTime(item.message.created_at)) + '</div>' +
 						'</article>').join('');
@@ -142,11 +156,11 @@ templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversation *domain
 									timeline.scrollTop = timeline.scrollHeight;
 									return;
 								}
-								if (payload.type === 'completed') {
-									terminal = true;
-									contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
-									citationsNode.innerHTML = renderCitations(payload.citations || []);
-									stampNode.textContent = formatDateTime(payload.at);
+						if (payload.type === 'completed') {
+							terminal = true;
+							contentNode.innerHTML = renderMessageContent(payload.content || '');
+							citationsNode.innerHTML = renderCitations(payload.citations || []);
+							stampNode.textContent = formatDateTime(payload.at);
 									live.removeAttribute('id');
 									status.textContent = 'Answer complete.';
 									timeline.scrollTop = timeline.scrollHeight;

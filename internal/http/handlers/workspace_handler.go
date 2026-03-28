@@ -110,7 +110,6 @@ func (h *WorkspaceHandler) SourcesPanel(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusInternalServerError, "render_sources_failed", err.Error())
 		return
 	}
-	}
 }
 
 func (h *WorkspaceHandler) UploadDocument(w http.ResponseWriter, r *http.Request) {
