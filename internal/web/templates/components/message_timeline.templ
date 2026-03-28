@@ -3,16 +3,215 @@ package components
 import "knowledge_base_RAG/internal/domain"
 
 templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversation *domain.Conversation) {
-	<section class="workspace-panel workspace-panel-main timeline-placeholder">
+	<section class={ "workspace-panel", "workspace-panel-main", templ.KV("timeline-placeholder", activeConversation == nil) }>
 		if activeKB == nil {
 			<p class="muted">The chat pane will appear here once a knowledge base is selected.</p>
 		} else if activeConversation == nil {
 			<p class="muted">This area will show the conversation timeline and composer.</p>
 		} else {
-			<div>
-				<p class="muted">Conversation ready.</p>
-				<p class="muted">Phase 3 keeps this as a placeholder while the sidebar now supports in-place selection and creation.</p>
+			<div
+				class="chat-pane"
+				data-kb-id={ activeKB.ID }
+				data-conversation-id={ activeConversation.ID }
+			>
+				<div id="timeline" class="chat-timeline muted">Loading messages…</div>
+				<form id="message-form" class="chat-composer">
+					<label class="chat-label" for="message-content">Ask a question</label>
+					<textarea id="message-content" placeholder="Ask a question about this knowledge base"></textarea>
+					<div class="chat-composer-actions">
+						<p id="message-status" class="muted chat-status">Answers stream from the server and are persisted with citations.</p>
+						<button type="submit">Send</button>
+					</div>
+				</form>
 			</div>
+			<script>
+				(() => {
+					const root = document.currentScript.previousElementSibling;
+					if (!root || root.dataset.initialized === 'true') {
+						return;
+					}
+					root.dataset.initialized = 'true';
+
+					const kbID = root.dataset.kbId;
+					const conversationID = root.dataset.conversationId;
+					const timeline = root.querySelector('#timeline');
+					const form = root.querySelector('#message-form');
+					const content = root.querySelector('#message-content');
+					const status = root.querySelector('#message-status');
+
+					function esc(value) {
+						return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+					}
+
+					function formatDateTime(value) {
+						if (!value) {
+							return '';
+						}
+						const date = new Date(value);
+						if (Number.isNaN(date.getTime())) {
+							return String(value);
+						}
+						return new Intl.DateTimeFormat(undefined, {
+							month: 'short',
+							day: 'numeric',
+							hour: 'numeric',
+							minute: '2-digit'
+						}).format(date);
+					}
+
+					function renderCitations(citations) {
+						if (!citations.length) {
+							return '';
+						}
+						return '<div class="chat-citations"><strong>Sources</strong><br />' +
+							citations.map(c => '[' + esc(c.citation_index) + '] ' + esc(c.source_label) + ' · ' + esc(c.excerpt)).join('<br />') +
+						'</div>';
+					}
+
+					async function loadMessages() {
+						const resp = await fetch('/api/kbs/' + kbID + '/conversations/' + conversationID + '/messages');
+						if (!resp.ok) {
+							timeline.textContent = 'Failed to load messages.';
+							return;
+						}
+						const messages = await resp.json();
+						if (!messages.length) {
+							timeline.innerHTML = '<p class="muted chat-empty">Ask the first question in this conversation.</p>';
+							return;
+						}
+						timeline.innerHTML = messages.map(item => '<article class="chat-message ' + esc(item.message.role) + '">' +
+							'<div class="chat-message-role">' + esc(item.message.role) + '</div>' +
+							'<div class="chat-message-body">' + esc(item.message.content).replaceAll('\n', '<br />') + '</div>' +
+							renderCitations(item.citations || []) +
+							'<div class="chat-stamp">' + esc(formatDateTime(item.message.created_at)) + '</div>' +
+						'</article>').join('');
+						timeline.scrollTop = timeline.scrollHeight;
+					}
+
+					function appendUserMessage(message) {
+						const empty = timeline.querySelector('.chat-empty');
+						if (empty) {
+							timeline.innerHTML = '';
+						}
+						timeline.insertAdjacentHTML('beforeend', '<article class="chat-message user">' +
+							'<div class="chat-message-role">user</div>' +
+							'<div class="chat-message-body">' + esc(message.content).replaceAll('\n', '<br />') + '</div>' +
+							'<div class="chat-stamp">' + esc(formatDateTime(message.created_at)) + '</div>' +
+						'</article>');
+						timeline.scrollTop = timeline.scrollHeight;
+					}
+
+					function ensureAssistantMessage() {
+						let node = root.querySelector('#assistant-live');
+						if (node) {
+							return node;
+						}
+						timeline.insertAdjacentHTML('beforeend', '<article id="assistant-live" class="chat-message assistant">' +
+							'<div class="chat-message-role">assistant</div>' +
+							'<div class="assistant-content chat-message-body"></div>' +
+							'<div class="assistant-citations chat-citations"></div>' +
+							'<div class="chat-stamp" id="assistant-live-stamp"></div>' +
+						'</article>');
+						timeline.scrollTop = timeline.scrollHeight;
+						return root.querySelector('#assistant-live');
+					}
+
+					function streamAssistant(streamURL) {
+						const live = ensureAssistantMessage();
+						const contentNode = live.querySelector('.assistant-content');
+						const citationsNode = live.querySelector('.assistant-citations');
+
+						return new Promise((resolve, reject) => {
+							const source = new EventSource(streamURL);
+							let terminal = false;
+							let sawPayload = false;
+							const stampNode = live.querySelector('#assistant-live-stamp');
+
+							source.addEventListener('assistant', (event) => {
+								sawPayload = true;
+								const payload = JSON.parse(event.data);
+								if (payload.type === 'snapshot') {
+									contentNode.textContent = '';
+									citationsNode.innerHTML = '';
+									stampNode.textContent = '';
+									status.textContent = 'Generating answer…';
+									return;
+								}
+								if (payload.type === 'token') {
+									contentNode.textContent += payload.content || '';
+									timeline.scrollTop = timeline.scrollHeight;
+									return;
+								}
+								if (payload.type === 'completed') {
+									terminal = true;
+									contentNode.innerHTML = esc(payload.content || '').replaceAll('\n', '<br />');
+									citationsNode.innerHTML = renderCitations(payload.citations || []);
+									stampNode.textContent = formatDateTime(payload.at);
+									live.removeAttribute('id');
+									status.textContent = 'Answer complete.';
+									timeline.scrollTop = timeline.scrollHeight;
+									source.close();
+									resolve(payload);
+									return;
+								}
+								if (payload.type === 'error') {
+									terminal = true;
+									status.textContent = payload.error || 'Assistant response failed.';
+									live.remove();
+									source.close();
+									reject(new Error(payload.error || 'Assistant response failed.'));
+								}
+							});
+
+							source.onerror = () => {
+								source.close();
+								if (terminal) {
+									return;
+								}
+								if (sawPayload && contentNode.textContent.trim()) {
+									terminal = true;
+									live.removeAttribute('id');
+									status.textContent = 'Answer complete.';
+									resolve({ content: contentNode.textContent });
+									return;
+								}
+								live.remove();
+								status.textContent = 'Assistant stream failed.';
+								reject(new Error('Assistant stream failed.'));
+							};
+						});
+					}
+
+					form.addEventListener('submit', async (event) => {
+						event.preventDefault();
+						if (!content.value.trim()) {
+							status.textContent = 'Message is required.';
+							return;
+						}
+						status.textContent = 'Saving message…';
+						const resp = await fetch('/api/kbs/' + kbID + '/conversations/' + conversationID + '/messages', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ content: content.value })
+						});
+						const payload = await resp.json().catch(() => null);
+						if (!resp.ok) {
+							status.textContent = payload?.message || 'Failed to save message.';
+							return;
+						}
+						appendUserMessage(payload.message);
+						content.value = '';
+						status.textContent = 'Waiting for assistant…';
+						try {
+							await streamAssistant(payload.stream_url);
+							await loadMessages();
+						} catch (_) {
+						}
+					});
+
+					loadMessages();
+				})();
+			</script>
 		}
 	</section>
 }
