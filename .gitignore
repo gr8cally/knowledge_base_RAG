@@ -9,8 +9,8 @@ data/
 .idea/
 
 # Generated templ output
-#internal/web/templates/*_templ.go
-#internal/web/templates/components/*_templ.go
+internal/web/templates/*_templ.go
+internal/web/templates/components/*_templ.go
 
 third_party/*
 
