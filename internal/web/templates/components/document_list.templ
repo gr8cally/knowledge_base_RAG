@@ -9,6 +9,12 @@ templ DocumentList(activeKB *domain.KnowledgeBase, items []domain.Document, noti
 	<section
 		id="sources-panel"
 		class="workspace-panel"
+		if activeKB != nil {
+			hx-get={ "/workspace/sources?kb=" + activeKB.ID }
+			hx-trigger="every 5s"
+			hx-target="#sources-panel"
+			hx-swap="outerHTML"
+		}
 	>
 		<div class="section-head">
 			<h2>Sources</h2>
