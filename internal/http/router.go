@@ -24,6 +24,7 @@ func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.C
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
 	mux.HandleFunc("GET /readyz", healthHandler.Ready)
 	mux.HandleFunc("GET /", workspaceHandler.Page)
+	mux.HandleFunc("POST /workspace/kbs", workspaceHandler.CreateKnowledgeBase)
 	mux.HandleFunc("POST /workspace/conversations", workspaceHandler.CreateConversation)
 	mux.HandleFunc("GET /workspace/sources", workspaceHandler.SourcesPanel)
 	mux.HandleFunc("POST /workspace/sources/upload", workspaceHandler.UploadDocument)

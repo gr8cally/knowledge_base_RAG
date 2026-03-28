@@ -63,6 +63,32 @@ func (h *WorkspaceHandler) Page(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *WorkspaceHandler) CreateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_form", "invalid knowledge base form")
+		return
+	}
+
+	kb, err := h.kbService.Create(r.Context(), r.FormValue("name"), r.FormValue("description"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "create_kb_failed", err.Error())
+		return
+	}
+
+	w.Header().Set("HX-Push-Url", "/?kb="+kb.ID)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	data, err := h.loadWorkspaceData(r.Context(), kb.ID, "")
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "workspace_load_failed", err.Error())
+		return
+	}
+	if err := templates.WorkspaceShell(data).Render(r.Context(), w); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "render_workspace_shell_failed", err.Error())
+		return
+	}
+}
+
 func (h *WorkspaceHandler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_form", "invalid conversation form")

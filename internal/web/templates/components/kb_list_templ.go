@@ -31,7 +31,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"workspace-panel\"><div class=\"section-head\"><h2>Knowledge Bases</h2><a href=\"/api/kbs\">API</a></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"workspace-panel\"><div class=\"section-head\"><h2>Knowledge Bases</h2><button class=\"secondary-pill kb-create-toggle\" type=\"button\">Add New</button></div><details class=\"kb-create-wrap\"><summary class=\"kb-create-summary\">Create a knowledge base</summary><form class=\"kb-create\" hx-post=\"/workspace/kbs\" hx-target=\"#workspace-shell\" hx-select=\"#workspace-shell\" hx-swap=\"outerHTML\"><input type=\"text\" name=\"name\" placeholder=\"New knowledge base\" autocomplete=\"off\"> <textarea name=\"description\" rows=\"2\" placeholder=\"Short description\"></textarea> <button type=\"submit\">Create KB</button></form></details> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -58,7 +58,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 				var templ_7745c5c3_Var3 templ.SafeURL
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/?kb=" + item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 17, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 40, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -71,7 +71,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("/?kb=" + item.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 18, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 41, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -97,7 +97,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 25, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 48, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -115,7 +115,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(item.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 27, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates/components/kb_list.templ`, Line: 50, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -136,7 +136,7 @@ func KBList(items []domain.KnowledgeBase, activeKBID string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<script>\n\t\t\t(() => {\n\t\t\t\tconst panel = document.currentScript.previousElementSibling;\n\t\t\t\tif (!panel || panel.dataset.kbCreateBound === 'true') {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tpanel.dataset.kbCreateBound = 'true';\n\n\t\t\t\tconst toggle = panel.querySelector('.kb-create-toggle');\n\t\t\t\tconst wrap = panel.querySelector('.kb-create-wrap');\n\t\t\t\tif (!toggle || !wrap) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\ttoggle.addEventListener('click', () => {\n\t\t\t\t\twrap.open = !wrap.open;\n\t\t\t\t\tif (wrap.open) {\n\t\t\t\t\t\tconst input = wrap.querySelector('input[name=\"name\"]');\n\t\t\t\t\t\tif (input) {\n\t\t\t\t\t\t\tinput.focus();\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t})();\n\t\t</script></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

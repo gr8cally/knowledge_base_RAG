@@ -120,6 +120,56 @@ templ WorkspacePage(data WorkspacePageData) {
 				gap: 10px;
 				margin-top: 12px;
 			}
+			.kb-create {
+				display: grid;
+				gap: 10px;
+				margin-top: 12px;
+			}
+			.kb-create-wrap {
+				margin-top: 12px;
+				margin-bottom: 12px;
+			}
+			.kb-create-summary {
+				display: none;
+			}
+			.kb-create-toggle {
+				cursor: pointer;
+			}
+			.kb-create input,
+			.kb-create textarea,
+			.kb-create button {
+				border-radius: 14px;
+				border: 1px solid var(--line);
+				font: inherit;
+				box-sizing: border-box;
+			}
+			.kb-create input,
+			.kb-create textarea {
+				padding: 12px 14px;
+				background: rgba(255, 255, 255, 0.84);
+				color: var(--ink);
+				width: 100%;
+			}
+			.kb-create textarea {
+				resize: vertical;
+				min-height: 78px;
+			}
+			.kb-create input::placeholder,
+			.kb-create textarea::placeholder {
+				color: var(--muted);
+			}
+			.kb-create button {
+				justify-self: start;
+				padding: 11px 16px;
+				background: linear-gradient(180deg, #8d3d1f, #723118);
+				color: #fff7ef;
+				cursor: pointer;
+				font-weight: 700;
+				box-shadow: 0 10px 18px rgba(141, 61, 31, 0.18);
+			}
+			.kb-create button:hover {
+				filter: brightness(1.03);
+			}
 			.conversation-create {
 				display: grid;
 				grid-template-columns: minmax(0, 1fr) auto;
