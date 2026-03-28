@@ -1,0 +1,18 @@
+package components
+
+import "knowledge_base_RAG/internal/domain"
+
+templ ChatHeader(activeKB *domain.KnowledgeBase, activeConversationID string) {
+	<section class="workspace-panel workspace-panel-main">
+		if activeKB == nil {
+			<h1>Workspace</h1>
+			<p class="muted">Create or select a knowledge base to begin.</p>
+		} else if activeConversationID == "" {
+			<h1>{ activeKB.Name }</h1>
+			<p class="muted">Select a conversation or create a new one to start chatting.</p>
+		} else {
+			<h1>{ activeKB.Name }</h1>
+			<p class="muted">Conversation selected: { activeConversationID }</p>
+		}
+	</section>
+}

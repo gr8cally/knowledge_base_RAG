@@ -1,0 +1,232 @@
+package templates
+
+import components "knowledge_base_RAG/internal/web/templates/components"
+
+templ WorkspacePage(data WorkspacePageData) {
+	@Layout("Workspace") {
+		<style>
+			:root {
+				--paper: #f5efe2;
+				--paper-2: #fffaf2;
+				--ink: #1f1a17;
+				--muted: #706456;
+				--line: rgba(84, 67, 44, 0.16);
+				--line-soft: rgba(84, 67, 44, 0.08);
+				--accent: #0f766e;
+				--accent-2: #8d3d1f;
+				--accent-soft: rgba(15, 118, 110, 0.12);
+				--shadow: 0 22px 50px rgba(46, 31, 11, 0.10);
+			}
+			body {
+				margin: 0;
+				font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+				color: var(--ink);
+				background:
+					radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 24rem),
+					radial-gradient(circle at 90% 10%, rgba(141, 61, 31, 0.10), transparent 18rem),
+					linear-gradient(180deg, #f7f1e7 0%, #ece0cd 100%);
+			}
+			main {
+				min-height: 100vh;
+			}
+			.workspace-shell {
+				max-width: 1540px;
+				margin: 0 auto;
+				padding: 24px;
+				display: grid;
+				grid-template-columns: minmax(310px, 360px) minmax(0, 1fr);
+				gap: 22px;
+				box-sizing: border-box;
+			}
+			.workspace-sidebar {
+				position: sticky;
+				top: 24px;
+				max-height: calc(100vh - 48px);
+				overflow: auto;
+				padding-right: 4px;
+			}
+			.workspace-sidebar,
+			.workspace-main {
+				min-width: 0;
+				display: grid;
+				gap: 16px;
+				align-content: start;
+			}
+			.workspace-panel {
+				background: rgba(255, 250, 242, 0.88);
+				border: 1px solid var(--line);
+				border-radius: 22px;
+				padding: 20px 20px 18px;
+				box-shadow: var(--shadow);
+				backdrop-filter: blur(10px);
+			}
+			.workspace-panel-main {
+				min-height: 160px;
+				background: rgba(255, 252, 247, 0.96);
+			}
+			.workspace-hero {
+				background:
+					linear-gradient(145deg, rgba(15, 118, 110, 0.12), rgba(255, 255, 255, 0.58)),
+					radial-gradient(circle at top right, rgba(141, 61, 31, 0.14), transparent 38%),
+					var(--paper-2);
+			}
+			h1, h2 {
+				margin: 0 0 8px 0;
+				line-height: 1.05;
+				letter-spacing: -0.03em;
+			}
+			h1 {
+				font-size: clamp(2.2rem, 4vw, 3.8rem);
+			}
+			h2 {
+				font-size: 0.88rem;
+				text-transform: uppercase;
+				letter-spacing: 0.16em;
+				color: var(--muted);
+			}
+			p {
+				margin: 0;
+			}
+			.muted {
+				color: var(--muted);
+				line-height: 1.5;
+			}
+			a {
+				color: var(--accent);
+				text-decoration: none;
+			}
+			a:hover {
+				text-decoration: none;
+			}
+			.section-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+			}
+			.section-head h2 {
+				margin-bottom: 0;
+			}
+			.section-head a {
+				font-size: 0.82rem;
+				font-weight: 700;
+				padding: 8px 12px;
+				border-radius: 999px;
+				background: var(--accent-soft);
+				color: var(--accent);
+			}
+			.list-stack {
+				display: grid;
+				gap: 10px;
+				margin-top: 12px;
+			}
+			.list-item {
+				display: block;
+				padding: 14px 15px;
+				border-radius: 16px;
+				border: 1px solid var(--line-soft);
+				background: rgba(255, 255, 255, 0.76);
+				transition:
+					transform 120ms ease,
+					border-color 120ms ease,
+					background 120ms ease,
+					box-shadow 120ms ease;
+			}
+			.list-item:hover {
+				transform: translateY(-1px);
+				border-color: var(--line);
+				box-shadow: 0 10px 20px rgba(46, 31, 11, 0.06);
+			}
+			.list-item.active {
+				background: linear-gradient(180deg, rgba(15, 118, 110, 0.14), rgba(15, 118, 110, 0.08));
+				border-color: rgba(15, 118, 110, 0.30);
+				box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
+			}
+			.list-title {
+				font-size: 1rem;
+				font-weight: 700;
+				margin-bottom: 4px;
+				color: var(--ink);
+			}
+			.list-meta {
+				color: var(--muted);
+				font-size: 0.9rem;
+				line-height: 1.35;
+			}
+			.summary-card {
+				margin-top: 10px;
+				padding: 16px;
+				border-radius: 18px;
+				border: 1px solid rgba(15, 118, 110, 0.16);
+				background:
+					linear-gradient(160deg, rgba(15, 118, 110, 0.11), rgba(255, 255, 255, 0.72)),
+					rgba(255, 255, 255, 0.84);
+			}
+			.summary-title {
+				font-size: 1.35rem;
+				font-weight: 700;
+				margin-bottom: 8px;
+			}
+			.timeline-placeholder {
+				min-height: 520px;
+				display: grid;
+				align-content: center;
+				justify-items: center;
+				text-align: center;
+				background:
+					linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.64)),
+					repeating-linear-gradient(
+						135deg,
+						rgba(84, 67, 44, 0.02),
+						rgba(84, 67, 44, 0.02) 12px,
+						transparent 12px,
+						transparent 24px
+					);
+				border: 1px dashed rgba(84, 67, 44, 0.18);
+			}
+			.workspace-note {
+				margin-top: 10px;
+				max-width: 34ch;
+				line-height: 1.55;
+				font-size: 1rem;
+			}
+			.workspace-main .workspace-panel:first-child {
+				padding-bottom: 22px;
+			}
+			.workspace-main .workspace-panel:first-child p {
+				max-width: 62ch;
+			}
+			.workspace-main .workspace-panel h1 {
+				margin-bottom: 12px;
+			}
+			@media (max-width: 980px) {
+				.workspace-shell {
+					grid-template-columns: 1fr;
+					padding: 16px;
+				}
+				.workspace-sidebar {
+					position: static;
+					max-height: none;
+					overflow: visible;
+					padding-right: 0;
+				}
+			}
+		</style>
+		<div class="workspace-shell">
+			<aside class="workspace-sidebar">
+				<section class="workspace-panel workspace-hero">
+					<h1>Knowledge Workspace</h1>
+					<p class="muted workspace-note">One place to switch knowledge bases, pick a conversation, and work against grounded sources without hopping across admin screens.</p>
+				</section>
+				@components.KBList(data.KnowledgeBases, data.ActiveKBID)
+				@components.KBSummary(data.ActiveKB, len(data.Conversations))
+				@components.ConversationList(data.Conversations, data.ActiveConversationID, data.ActiveKBID)
+				@components.DocumentList(data.ActiveKB)
+			</aside>
+			<section class="workspace-main">
+				@components.ChatHeader(data.ActiveKB, data.ActiveConversationID)
+				@components.MessageTimeline(data.ActiveKB, data.ActiveConversationID)
+			</section>
+		</div>
+	}
+}

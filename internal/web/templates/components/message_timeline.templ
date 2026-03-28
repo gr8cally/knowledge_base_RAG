@@ -1,0 +1,15 @@
+package components
+
+import "knowledge_base_RAG/internal/domain"
+
+templ MessageTimeline(activeKB *domain.KnowledgeBase, activeConversationID string) {
+	<section class="workspace-panel workspace-panel-main timeline-placeholder">
+		if activeKB == nil {
+			<p class="muted">The chat pane will appear here once a knowledge base is selected.</p>
+		} else if activeConversationID == "" {
+			<p class="muted">This area will show the conversation timeline and composer.</p>
+		} else {
+			<p class="muted">Phase 1 placeholder for the chat timeline of the selected conversation.</p>
+		}
+	</section>
+}

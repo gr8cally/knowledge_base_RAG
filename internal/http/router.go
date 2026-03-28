@@ -14,6 +14,7 @@ import (
 func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.Context) error, kbService *app.KnowledgeBaseService, documentService *ingest.Service, conversationService *app.ConversationService, chatService *app.ChatService, maxUploadMB int) http.Handler {
 	healthHandler := handlers.NewHealthHandler(sqlitePath, chromaPing)
 	kbHandler := handlers.NewKBHandler(kbService)
+	workspaceHandler := handlers.NewWorkspaceHandler(kbService, conversationService)
 	documentHandler := handlers.NewDocumentHandler(documentService, maxUploadMB)
 	ingestHandler := handlers.NewIngestHandler(documentService)
 	conversationHandler := handlers.NewConversationHandler(conversationService)
@@ -22,7 +23,7 @@ func NewRouter(logger *slog.Logger, sqlitePath string, chromaPing func(context.C
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler.Health)
 	mux.HandleFunc("GET /readyz", healthHandler.Ready)
-	mux.HandleFunc("GET /", kbHandler.Index)
+	mux.HandleFunc("GET /", workspaceHandler.Page)
 	mux.HandleFunc("GET /kbs/{kbID}", kbHandler.Detail)
 	mux.HandleFunc("GET /kbs/{kbID}/conversations/{conversationID}", chatHandler.Page)
 	mux.HandleFunc("GET /api/kbs", kbHandler.ListAPI)
