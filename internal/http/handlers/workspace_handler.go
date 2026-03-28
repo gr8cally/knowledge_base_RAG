@@ -26,14 +26,31 @@ func NewWorkspaceHandler(kbService *app.KnowledgeBaseService, conversationServic
 }
 
 func (h *WorkspaceHandler) Page(w http.ResponseWriter, r *http.Request) {
-	kbs, err := h.kbService.List(r.Context())
+	data, err := h.loadWorkspaceData(r.Context(), r.URL.Query().Get("kb"), r.URL.Query().Get("conversation"))
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list_kbs_failed", err.Error())
+		writeAPIError(w, http.StatusInternalServerError, "workspace_load_failed", err.Error())
 		return
 	}
 
-	selectedKBID := r.URL.Query().Get("kb")
-	selectedConversationID := r.URL.Query().Get("conversation")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.Header.Get("HX-Request") == "true" {
+		if err := templates.WorkspaceShell(data).Render(r.Context(), w); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "render_workspace_shell_failed", err.Error())
+		}
+		return
+	}
+
+	if err := templates.WorkspacePage(data).Render(r.Context(), w); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "render_workspace_failed", err.Error())
+		return
+	}
+}
+
+func (h *WorkspaceHandler) loadWorkspaceData(ctx context.Context, selectedKBID string, selectedConversationID string) (templates.WorkspacePageData, error) {
+	kbs, err := h.kbService.List(ctx)
+	if err != nil {
+		return templates.WorkspacePageData{}, err
+	}
 
 	var activeKB *domain.KnowledgeBase
 	if selectedKBID != "" {
@@ -51,10 +68,9 @@ func (h *WorkspaceHandler) Page(w http.ResponseWriter, r *http.Request) {
 
 	conversations := []domain.Conversation{}
 	if activeKB != nil {
-		items, err := h.conversationService.List(r.Context(), activeKB.ID)
+		items, err := h.conversationService.List(ctx, activeKB.ID)
 		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "list_conversations_failed", err.Error())
-			return
+			return templates.WorkspacePageData{}, err
 		}
 		conversations = items
 	}
@@ -76,17 +92,11 @@ func (h *WorkspaceHandler) Page(w http.ResponseWriter, r *http.Request) {
 		activeConversationID = conversations[0].ID
 	}
 
-	data := templates.WorkspacePageData{
+	return templates.WorkspacePageData{
 		KnowledgeBases:       kbs,
 		ActiveKBID:           selectedKBID,
 		ActiveKB:             activeKB,
 		Conversations:        conversations,
 		ActiveConversationID: activeConversationID,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := templates.WorkspacePage(data).Render(r.Context(), w); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "render_workspace_failed", err.Error())
-		return
-	}
+	}, nil
 }

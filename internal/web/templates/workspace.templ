@@ -212,21 +212,25 @@ templ WorkspacePage(data WorkspacePageData) {
 				}
 			}
 		</style>
-		<div class="workspace-shell">
-			<aside class="workspace-sidebar">
-				<section class="workspace-panel workspace-hero">
-					<h1>Knowledge Workspace</h1>
-					<p class="muted workspace-note">One place to switch knowledge bases, pick a conversation, and work against grounded sources without hopping across admin screens.</p>
-				</section>
-				@components.KBList(data.KnowledgeBases, data.ActiveKBID)
-				@components.KBSummary(data.ActiveKB, len(data.Conversations))
-				@components.ConversationList(data.Conversations, data.ActiveConversationID, data.ActiveKBID)
-				@components.DocumentList(data.ActiveKB)
-			</aside>
-			<section class="workspace-main">
-				@components.ChatHeader(data.ActiveKB, data.ActiveConversationID)
-				@components.MessageTimeline(data.ActiveKB, data.ActiveConversationID)
-			</section>
-		</div>
+		@WorkspaceShell(data)
 	}
+}
+
+templ WorkspaceShell(data WorkspacePageData) {
+	<div id="workspace-shell" class="workspace-shell">
+		<aside class="workspace-sidebar">
+			<section class="workspace-panel workspace-hero">
+				<h1>Knowledge Workspace</h1>
+				<p class="muted workspace-note">One place to switch knowledge bases, pick a conversation, and work against grounded sources without hopping across admin screens.</p>
+			</section>
+			@components.KBList(data.KnowledgeBases, data.ActiveKBID)
+			@components.KBSummary(data.ActiveKB, len(data.Conversations))
+			@components.ConversationList(data.Conversations, data.ActiveConversationID, data.ActiveKBID)
+			@components.DocumentList(data.ActiveKB)
+		</aside>
+		<section class="workspace-main">
+			@components.ChatHeader(data.ActiveKB, data.ActiveConversationID)
+			@components.MessageTimeline(data.ActiveKB, data.ActiveConversationID)
+		</section>
+	</div>
 }

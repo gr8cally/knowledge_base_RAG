@@ -15,6 +15,11 @@ templ KBList(items []domain.KnowledgeBase, activeKBID string) {
 				for _, item := range items {
 					<a
 						href={ templ.SafeURL("/?kb=" + item.ID) }
+						hx-get={ "/?kb=" + item.ID }
+						hx-target="#workspace-shell"
+						hx-select="#workspace-shell"
+						hx-swap="outerHTML"
+						hx-push-url="true"
 						class={ "list-item", templ.KV("active", item.ID == activeKBID) }
 					>
 						<div class="list-title">{ item.Name }</div>
